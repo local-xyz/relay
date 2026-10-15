@@ -410,8 +410,8 @@ impl Environment {
         Ok(())
     }
 
-    /// Restarts the relay with latest (v5) contracts as current.
-    /// Legacy (v4) contracts become the legacy set.
+    /// Restarts the relay with the current contracts as current.
+    /// The legacy contracts become the legacy set.
     pub async fn restart_with_latest(&mut self) -> eyre::Result<()> {
         // Clone the current config
         let mut config = self.config.clone();
@@ -420,11 +420,11 @@ impl Environment {
         config.legacy_orchestrators.clear();
         config.legacy_delegation_proxies.clear();
 
-        // Add v4 contracts to legacy
+        // Add the legacy contracts to legacy
         config.legacy_orchestrators.insert(self.contracts.legacy_orchestrator);
         config.legacy_delegation_proxies.insert(self.contracts.legacy_delegation_proxy);
 
-        // Set v5 contracts as current
+        // Set the current contracts as current
         config.orchestrator = self.contracts.orchestrator;
         config.simulator = self.contracts.simulator;
         config.delegation_proxy = self.contracts.delegation;
@@ -436,8 +436,8 @@ impl Environment {
         self.restart_relay(config).await
     }
 
-    /// Restarts the relay with legacy (v4) contracts as current.
-    pub async fn restart_with_v4(&mut self) -> eyre::Result<()> {
+    /// Restarts the relay with the legacy contracts as current.
+    pub async fn restart_with_legacy(&mut self) -> eyre::Result<()> {
         // Clone the current config
         let mut config = self.config.clone();
 
@@ -445,7 +445,7 @@ impl Environment {
         config.legacy_orchestrators.clear();
         config.legacy_delegation_proxies.clear();
 
-        // Set v4 contracts as current
+        // Set the legacy contracts as current
         config.orchestrator = self.contracts.legacy_orchestrator.orchestrator;
         config.simulator = self.contracts.legacy_orchestrator.simulator;
         config.delegation_proxy = self.contracts.legacy_delegation_proxy;
@@ -1045,14 +1045,20 @@ async fn deploy_all_contracts<P: Provider + WalletProvider>(
 
     let delegation_future = async {
         if let Ok(address) = std::env::var("TEST_PROXY") {
-            let delegation_implementation =
-                deploy_delegation_implementation(provider, &contracts_path, orchestrator).await?;
+            let delegation_implementation = deploy_delegation_implementation(
+                provider,
+                &contracts_path,
+                ACCOUNT_ARTIFACT,
+                orchestrator,
+            )
+            .await?;
             Ok::<_, eyre::Error>((
                 delegation_implementation,
                 Address::from_str(&address).wrap_err("Proxy address parse failed.")?,
             ))
         } else {
-            deploy_delegation_contracts(provider, &contracts_path, orchestrator).await
+            deploy_delegation_contracts(provider, &contracts_path, ACCOUNT_ARTIFACT, orchestrator)
+                .await
         }
     };
 
@@ -1129,16 +1135,19 @@ async fn deploy_all_contracts<P: Provider + WalletProvider>(
         multicall_future
     )?;
 
-    // Deploy legacy contracts from accountv4
-    // Use the accountv4 contracts path (tests/account/lib/accountv4/out)
-    let accountv4_path = contracts_path.parent().unwrap().join("lib/accountv4/out");
+    // Deploy the legacy set: a second orchestrator and simulator (the relay tells them apart by
+    // address) and a proxy over the legacy account implementation.
     let legacy_orchestrator = LegacyOrchestrator {
-        orchestrator: deploy_orchestrator(provider, &accountv4_path).await?,
-        simulator: deploy_simulator(provider, &accountv4_path).await?,
+        orchestrator: deploy_orchestrator(provider, &contracts_path).await?,
+        simulator: deploy_simulator(provider, &contracts_path).await?,
     };
-    let (_, legacy_delegation_proxy) =
-        deploy_delegation_contracts(provider, &accountv4_path, legacy_orchestrator.orchestrator)
-            .await?;
+    let (_, legacy_delegation_proxy) = deploy_delegation_contracts(
+        provider,
+        &contracts_path,
+        LEGACY_ACCOUNT_ARTIFACT,
+        legacy_orchestrator.orchestrator,
+    )
+    .await?;
 
     Ok(ContractAddresses {
         simulator,
@@ -1182,15 +1191,24 @@ async fn deploy_funder<P: Provider + WalletProvider>(
     .await
 }
 
+/// Artifact of the current account implementation.
+const ACCOUNT_ARTIFACT: &str = "GridAccount.sol/GridAccount.json";
+
+/// Artifact of the legacy account implementation: `GridAccount` reporting an older domain version
+/// (`test/fixtures/GridAccountOld.sol` in the account repository). Accounts delegated to a proxy
+/// over it are what the relay upgrades to the current implementation.
+const LEGACY_ACCOUNT_ARTIFACT: &str = "GridAccountOld.sol/GridAccountOld.json";
+
 /// Deploy the delegation implementation contract
 async fn deploy_delegation_implementation<P: Provider>(
     provider: &P,
     contracts_path: &Path,
+    artifact: &str,
     orchestrator: Address,
 ) -> eyre::Result<Address> {
     deploy_contract(
         provider,
-        &contracts_path.join("GridAccount.sol/GridAccount.json"),
+        &contracts_path.join(artifact),
         Some(orchestrator.abi_encode().into()),
     )
     .await
@@ -1200,10 +1218,11 @@ async fn deploy_delegation_implementation<P: Provider>(
 async fn deploy_delegation_contracts<P: Provider>(
     provider: &P,
     contracts_path: &Path,
+    artifact: &str,
     orchestrator: Address,
 ) -> eyre::Result<(Address, Address)> {
     let delegation =
-        deploy_delegation_implementation(provider, contracts_path, orchestrator).await?;
+        deploy_delegation_implementation(provider, contracts_path, artifact, orchestrator).await?;
 
     let delegation_proxy = deploy_contract(
         provider,

@@ -22,6 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   forge build && forge build lib/solady/test/utils/mocks/MockERC20.sol && forge build lib/solady/test/utils/mocks/MockERC721.sol
   TEST_CONTRACTS=$(pwd)/out cargo test -- e2e
   ```
+  The legacy contract set the upgrade tests use is deployed from the same artifacts: the
+  account repository's `test/fixtures/GridAccountOld.sol` (a `GridAccount` reporting an older
+  domain version) behind its own proxy, plus a second orchestrator and simulator.
 
 ### Code Quality
 - `make fmt` - Format code (uses nightly)

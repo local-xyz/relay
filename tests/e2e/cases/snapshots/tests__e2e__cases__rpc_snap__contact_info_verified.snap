@@ -4,6 +4,7 @@ expression: contact_response
 ---
 {
   "email": "test@example.com",
+  "emailVerifiedAt": "[email_timestamp]",
   "phone": "+1234567890",
   "phoneVerifiedAt": "[phone_timestamp]"
 }

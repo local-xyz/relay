@@ -356,8 +356,8 @@ async fn test_delegation_upgrade_with_stored_account_impl(
     // Start a brand new environment
     let mut env = Environment::setup_multi_chain(2).await?;
 
-    // First restart with legacy (v4) contracts as current
-    env.restart_with_v4().await?;
+    // First restart with the legacy contracts as current
+    env.restart_with_legacy().await?;
 
     let admin_key = if use_eoa_key {
         KeyWith712Signer::mock_admin_with_key(KeyType::Secp256k1, EOA_PRIVATE_KEY)?.unwrap()
@@ -375,7 +375,7 @@ async fn test_delegation_upgrade_with_stored_account_impl(
                 .await?;
     }
 
-    // Now restart with latest (v5) contracts as current
+    // Now restart with the current contracts as current
     env.restart_with_latest().await?;
 
     let chain_capabilities = &env.relay_endpoint.get_capabilities(None).await?.0[&env.chain_id()];
@@ -401,24 +401,24 @@ async fn test_delegation_upgrade_with_stored_account_impl(
         })
         .await?;
 
-    // Test ERC1271 digest wrapping for v0.4 (should NOT be wrapped)
-    // Calculate what the digest should be from the context (without ERC1271 wrapping)
+    // The legacy account is a 0.5.x `GridAccount` (an older domain version), so the digest is
+    // ERC1271 wrapped exactly when the signing key is the delegated EOA itself.
     let contracts = VersionedContracts::new(&env.config, env.provider()).await?;
-    let (computed_digest_v4, _) =
+    let (computed_digest, _) =
         response.context.compute_signing_digest(None, &contracts, env.provider()).await?;
-
-    // For v0.4, the digest should NOT be ERC1271 wrapped
-    assert_eq!(
-        response.digest, computed_digest_v4,
-        "V4 digest should equal computed digest (NOT ERC1271 wrapped)"
-    );
+    let expected_digest = if use_eoa_key {
+        Account::new(env.eoa.address(), env.provider()).digest_erc1271(computed_digest)
+    } else {
+        computed_digest
+    };
+    assert_eq!(response.digest, expected_digest, "legacy digest wrapping mismatch");
 
     // Decode the execution data to Vec<Call>
     let quote = response.context.quote().unwrap();
 
-    // Assert that the quote is using v04 Intent (since account was created on v04 orchestrator)
+    // The legacy orchestrator is a 0.5.x orchestrator too, so the intent is a v05 Intent.
     let intent = &quote.ty().quotes[0].intent;
-    assert!(intent.as_v04().is_some());
+    assert!(intent.as_v05().is_some());
 
     let calls = Vec::<Call>::abi_decode(intent.execution_data()).unwrap();
 
@@ -452,7 +452,7 @@ async fn test_delegation_upgrade_with_stored_account_impl(
     // After upgrade, the account should now be using the latest orchestrator
     assert_eq!(
         Account::new(env.eoa.address(), env.provider()).get_orchestrator().await?,
-        env.orchestrator, // Should be using the current (v5) orchestrator
+        env.orchestrator, // Should be using the current orchestrator
     );
 
     let response = env
@@ -475,7 +475,7 @@ async fn test_delegation_upgrade_with_stored_account_impl(
         })
         .await?;
 
-    // For v0.5+, the digest SHOULD be ERC1271 wrapped when:
+    // After the upgrade, the digest SHOULD be ERC1271 wrapped when:
     // 1. Key is KeyType::Secp256k1
     // 2. The key's address is delegated (has a delegation on-chain or stored where key pubkey ==
     //    eoa address)
@@ -483,14 +483,14 @@ async fn test_delegation_upgrade_with_stored_account_impl(
     if use_eoa_key {
         // Using EOA's key - the key address matches env.eoa which has delegation,
         // so digest should be ERC1271 wrapped
-        let (computed_digest_v5, _) =
+        let (computed_digest_current, _) =
             response.context.compute_signing_digest(None, &contracts, env.provider()).await?;
         let expected_wrapped_digest =
-            Account::new(env.eoa.address(), env.provider()).digest_erc1271(computed_digest_v5);
+            Account::new(env.eoa.address(), env.provider()).digest_erc1271(computed_digest_current);
 
         assert_eq!(
             response.digest, expected_wrapped_digest,
-            "V5 digest should equal ERC1271-wrapped computed digest (key address has delegation)"
+            "upgraded digest should equal ERC1271-wrapped computed digest (key address has delegation)"
         );
     }
 
@@ -520,8 +520,8 @@ async fn test_delegation_upgrade_with_stored_account_impl(
 
     // Only test multichain transfer with random keys (not with EOA key)
     if !use_eoa_key {
-        // Now test a multichain transfer where the chain0 account is on v5, but the chain1 account
-        // is not yet deployed but stored in db as v4
+        // Now test a multichain transfer where the chain0 account is on the current contracts, but the chain1 account
+        // is not yet deployed but stored in db on the legacy contracts
 
         // Check balances on both chains
         let chain0_balance =

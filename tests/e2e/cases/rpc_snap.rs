@@ -549,6 +549,7 @@ async fn test_onramp() -> eyre::Result<()> {
     assert_eq!(contact_response.phone.as_deref(), Some(phone), "Phone should match");
 
     insta::assert_json_snapshot!("contact_info_verified", contact_response, {
+        ".emailVerifiedAt" => "[email_timestamp]",
         ".phoneVerifiedAt" => "[phone_timestamp]",
     });
 
