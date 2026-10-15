@@ -11,7 +11,7 @@ use relay::{
     signers::Eip712PayLoadSigner,
     types::{
         Call, CallPermission,
-        IthacaAccount::SpendPeriod,
+        GridAccount::SpendPeriod,
         KeyType, KeyWith712Signer,
         rpc::{
             AuthorizeKey, AuthorizeKeyResponse, Meta, Permission, PrepareCallsCapabilities,

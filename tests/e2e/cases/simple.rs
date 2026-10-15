@@ -12,9 +12,9 @@ use eyre::Result;
 use relay::{
     signers::DynSigner,
     types::{
-        Call, IERC20,
-        IthacaAccount::SpendPeriod,
-        KeyType, KeyWith712Signer, Signature,
+        Call,
+        GridAccount::SpendPeriod,
+        IERC20, KeyType, KeyWith712Signer, Signature,
         rpc::{
             Permission, PrepareUpgradeAccountParameters, SpendPermission,
             UpgradeAccountCapabilities, UpgradeAccountParameters, UpgradeAccountSignatures,

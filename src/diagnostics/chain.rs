@@ -83,7 +83,7 @@ impl<'a> ChainDiagnostics<'a> {
     ///   type
     /// - Legacy Orchestrators: Same as Orchestrator check
     /// - DelegationProxy (main + legacy): Gets implementation addresses via multicall
-    /// - IthacaAccount implementations: Checks EIP712 domain name
+    /// - GridAccount implementations: Checks EIP712 domain name
     /// - Settler (if configured): Both Simple and LayerZero settlers check EIP712 domain name
     /// - LayerZero configuration: Checked separately in layerzero diagnostics module
     /// - SimpleFunder: Checks all signers are registered as gas wallets and owner key is correct,
@@ -135,7 +135,7 @@ impl<'a> ChainDiagnostics<'a> {
             errors,
             multicall_proxies.aggregate3().await?,
             proxies,
-            |implementation, _| eip712s.push(("IthacaAccount", implementation))
+            |implementation, _| eip712s.push(("GridAccount", implementation))
         );
 
         // Add settler to EIP-712 checks if they exist

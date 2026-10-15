@@ -16,9 +16,9 @@ use relay::{
     rpc::RelayApiClient,
     signers::Eip712PayLoadSigner,
     types::{
-        Account, Call, IERC20,
-        IthacaAccount::{self, upgradeProxyAccountCall},
-        KeyType, KeyWith712Signer, Signature, SignedCall, VersionedContracts,
+        Account, Call,
+        GridAccount::{self, upgradeProxyAccountCall},
+        IERC20, KeyType, KeyWith712Signer, Signature, SignedCall, VersionedContracts,
         rpc::{Meta, PrepareCallsCapabilities, PrepareCallsParameters},
     },
 };
@@ -253,9 +253,7 @@ pub async fn upgrade_delegation(env: &Environment, address: Address) {
         .from(env.eoa.address())
         .to(env.eoa.address())
         .input(
-            IthacaAccount::upgradeProxyAccountCall { newImplementation: address }
-                .abi_encode()
-                .into(),
+            GridAccount::upgradeProxyAccountCall { newImplementation: address }.abi_encode().into(),
         )
         .gas_limit(100_000);
     let _tx_hash: B256 =
@@ -280,7 +278,7 @@ async fn upgrade_delegation_with_precall() -> eyre::Result<()> {
             calls: vec![Call {
                 to: env.eoa.address(),
                 value: U256::ZERO,
-                data: IthacaAccount::upgradeProxyAccountCall {
+                data: GridAccount::upgradeProxyAccountCall {
                     newImplementation: caps
                         .chain(env.chain_id())
                         .contracts

@@ -7,8 +7,8 @@ use crate::{
     storage::StorageApi,
     types::IDelegation,
 };
-use IthacaAccount::{
-    IthacaAccountInstance, spendAndExecuteInfosReturn, unwrapAndValidateSignatureReturn,
+use GridAccount::{
+    GridAccountInstance, spendAndExecuteInfosReturn, unwrapAndValidateSignatureReturn,
 };
 use alloy::{
     dyn_abi::Eip712Domain,
@@ -46,7 +46,7 @@ sol! {
 sol! {
     #[sol(rpc)]
     #[derive(Debug)]
-    contract IthacaAccount {
+    contract GridAccount {
         /// A spend period.
         #[derive(Eq, PartialEq, Serialize, Deserialize)]
         #[serde(rename_all = "lowercase")]
@@ -249,7 +249,7 @@ pub struct CallPermission {
 /// A Ithaca account.
 #[derive(Debug, Clone)]
 pub struct Account<P: Provider> {
-    delegation: IthacaAccountInstance<P>,
+    delegation: GridAccountInstance<P>,
     overrides: StateOverride,
 }
 
@@ -257,7 +257,7 @@ impl<P: Provider> Account<P> {
     /// Create a new instance of [`Account`].
     pub fn new(address: Address, provider: P) -> Self {
         Self {
-            delegation: IthacaAccountInstance::new(address, provider),
+            delegation: GridAccountInstance::new(address, provider),
             overrides: StateOverride::default(),
         }
     }
@@ -463,11 +463,11 @@ impl<P: Provider> Account<P> {
 
     /// Wraps a digest for ERC1271 signature validation.
     ///
-    /// This implements the same logic as IthacaAccount.sol's isValidSignature function.
+    /// This implements the same logic as GridAccount.sol's isValidSignature function.
     pub fn digest_erc1271(&self, digest: B256) -> B256 {
         let domain = Eip712Domain::new(None, None, None, Some(*self.delegation.address()), None);
 
-        IthacaAccount::ERC1271Sign { digest }.eip712_signing_hash(&domain)
+        GridAccount::ERC1271Sign { digest }.eip712_signing_hash(&domain)
     }
 
     /// Get the next nonce for the given EOA.
@@ -573,7 +573,7 @@ mod compatibility_tests {
     fn forever_spend_period_decodes_from_account_contract() {
         use alloy::sol_types::SolValue;
         let encoded = alloy::primitives::U256::from(6).abi_encode();
-        let period = super::IthacaAccount::SpendPeriod::abi_decode(&encoded).unwrap();
+        let period = super::GridAccount::SpendPeriod::abi_decode(&encoded).unwrap();
         assert_eq!(serde_json::to_value(period).unwrap(), "forever");
     }
 }

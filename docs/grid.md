@@ -5,12 +5,13 @@ This repository starts at Ithaca relay commit `bbbaf3f7ac50a3cf886cf9544733b317f
 ## Changes from upstream
 
 - Decode `KeyType.External` and `SpendPeriod.Forever`, plus the errors and refund events in Grid's current account contracts. External keys can be returned by `wallet_getKeys`; creating quotes with an external signer still returns `UnsupportedKeyType`, as upstream does. This does not add external signer simulation.
-- Test against `local-xyz/account-contracts` at `b026a6a3e877e8110e1e36c57f63dbd5d5b154e6`, the revision used by Grid when this fork was restored. Preserve v0.4 compatibility.
+- Test against `local-xyz/account-contracts` at `b7629795541242d0c7fe7a3d0a315ec09873c6f1`, the revision Grid pins. Preserve v0.4 compatibility.
+- Bind to the account contract as `GridAccount` (`src/types/account.rs`). That revision renamed `IthacaAccount` to `GridAccount` and set its EIP-712 domain to `GridAccount` `0.5.11`; the chain diagnostics in `src/diagnostics/chain.rs` require the delegation implementation to report that domain name, so this relay does not pass diagnostics against implementations deployed as `IthacaAccount`.
 - Restore the configurable email sender and CLI/config-only environment handling from Grid commit `029d3501`. Resend keys are excluded from saved configuration.
 - Restore verified-email evidence from Grid commit `d673e498`: pending emails must not count as verified. Both memory and PostgreSQL storage are covered.
 - Enable PostgreSQL TLS from Grid commit `1e7c8bda` for encrypted database connections.
 - Update only the upstream lockfile packages with security fixes (TLS, AWS-LC, bytes, h2, rand, ruint, time, and crossbeam), retaining compatible dependency ranges. Two maintenance-only advisories remain documented in `deny.toml`; no vulnerability advisory is suppressed.
-- Use LocalProtocol's identity domain by default and publish from this repository to the existing private `ghcr.io/local-xyz/grid-relay` package.
+- Use LocalProtocol's identity domain by default. Releases are published as `ghcr.io/local-xyz/relay:<version>` and `ghcr.io/local-xyz/relay:latest` (linux/amd64 and linux/arm64); the `docker` workflow's commit-tagged candidates go to `ghcr.io/local-xyz/grid-relay`.
 
 The upstream transaction, quote, gas estimation, and settlement algorithms are retained.
 

@@ -13,11 +13,11 @@ use crate::{
 };
 
 use super::{
-    IDelegation::{authorizeCall, revokeCall},
-    IthacaAccount::{
+    GridAccount::{
         SpendPeriod, removeSpendLimitCall, setCanExecuteCall, setSpendLimitCall,
         upgradeProxyAccountCall,
     },
+    IDelegation::{authorizeCall, revokeCall},
     Key,
 };
 

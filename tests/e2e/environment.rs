@@ -1190,7 +1190,7 @@ async fn deploy_delegation_implementation<P: Provider>(
 ) -> eyre::Result<Address> {
     deploy_contract(
         provider,
-        &contracts_path.join("IthacaAccount.sol/IthacaAccount.json"),
+        &contracts_path.join("GridAccount.sol/GridAccount.json"),
         Some(orchestrator.abi_encode().into()),
     )
     .await

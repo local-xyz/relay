@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{
     CallPermission,
-    IthacaAccount::{SpendInfo, SpendPeriod},
+    GridAccount::{SpendInfo, SpendPeriod},
 };
 
 /// Represents key permissions.

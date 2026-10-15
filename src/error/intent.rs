@@ -1,7 +1,7 @@
 use super::{MerkleError, internal_rpc, invalid_params, rpc_err};
 use crate::{
     error::ContractErrors,
-    types::{IthacaAccount::IthacaAccountErrors, OrchestratorContract::OrchestratorContractErrors},
+    types::{GridAccount::GridAccountErrors, OrchestratorContract::OrchestratorContractErrors},
 };
 use alloy::{
     primitives::{Address, B256, Bytes},
@@ -103,16 +103,14 @@ impl std::fmt::Display for IntentRevert {
 
 impl IntentRevert {
     /// Creates a new instance of [`IntentRevert`]. Attempts to decode
-    /// [`OrchestratorContractErrors`] and[`IthacaAccountErrors`] .
+    /// [`OrchestratorContractErrors`] and[`GridAccountErrors`] .
     pub fn new(revert_reason: Bytes) -> Self {
         Self {
             decoded_error: OrchestratorContractErrors::abi_decode(&revert_reason)
                 .ok()
                 .map(|err| format!("{err:?}"))
                 .or_else(|| {
-                    IthacaAccountErrors::abi_decode(&revert_reason)
-                        .ok()
-                        .map(|err| format!("{err:?}"))
+                    GridAccountErrors::abi_decode(&revert_reason).ok().map(|err| format!("{err:?}"))
                 })
                 .or_else(|| {
                     ContractErrors::ContractErrorsErrors::abi_decode(&revert_reason)

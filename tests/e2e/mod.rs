@@ -32,7 +32,7 @@ use relay::{
     rpc::RelayApiClient,
     signers::Eip712PayLoadSigner,
     types::{
-        IthacaAccount, KeyWith712Signer,
+        GridAccount, KeyWith712Signer,
         rpc::{
             BundleId, CallsStatus, Meta, PrepareCallsCapabilities, PrepareCallsContext,
             PrepareCallsParameters, PrepareCallsResponse, SendPreparedCallsParameters,

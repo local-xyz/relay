@@ -132,7 +132,7 @@ mod tests {
 
     use crate::types::{
         Call, CallPermission,
-        IthacaAccount::SpendPeriod,
+        GridAccount::SpendPeriod,
         Key, KeyType, U40,
         rpc::{AuthorizeKey, AuthorizeKeyResponse, Permission, RevokeKey, SpendPermission},
     };

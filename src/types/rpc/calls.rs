@@ -798,9 +798,9 @@ pub struct CallHistoryCapabilities {
 mod tests {
     use crate::types::{
         AssetDeficit, AssetDeficits, AssetDiff, AssetDiffs, AssetMetadata, AssetPrice,
-        CallPermission, DiffDirection, Intent, IntentV05,
-        IthacaAccount::SpendPeriod,
-        Quote, Quotes, U40,
+        CallPermission, DiffDirection,
+        GridAccount::SpendPeriod,
+        Intent, IntentV05, Quote, Quotes, U40,
         rpc::{Permission, PermissionDiscriminants, SpendPermission},
     };
 

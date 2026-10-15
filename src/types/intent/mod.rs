@@ -3,7 +3,7 @@ use crate::{
     error::{IntentError, MerkleError, RelayError},
     types::{
         CallPermission,
-        IthacaAccount::{setCanExecuteCall, setSpendLimitCall},
+        GridAccount::{setCanExecuteCall, setSpendLimitCall},
         KeyType, Signature, SignedCall, VersionedContract,
         rpc::{
             AddressOrNative, AuthorizeKey, AuthorizeKeyResponse, BalanceOverrides, CallKey,

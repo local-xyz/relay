@@ -1189,7 +1189,7 @@ impl Relay {
             if let DelegationStatus::Stored { account, implementation } = delegation_status {
                 // check if the implementation is at least v0.5.6. before ithaca account v0.5.6, the
                 // contracts had a check which required all precalls to be signed by the eoa
-                if self.is_ithaca_account(implementation, semver::Version::new(0, 5, 6)) {
+                if self.is_grid_account(implementation, semver::Version::new(0, 5, 6)) {
                     // put the delegation as the first call
                     pre_calls.insert(0, account.pre_call.clone());
                     additional_authorization = Some((fee_payer, account.signed_authorization))
@@ -1292,7 +1292,7 @@ impl Relay {
 
     /// Checks if the provided address points to an ithaca account, with the desired version or
     /// higher.
-    fn is_ithaca_account(&self, implementation: Address, min_version: semver::Version) -> bool {
+    fn is_grid_account(&self, implementation: Address, min_version: semver::Version) -> bool {
         self.contracts()
             .get_delegation_implementation_version(implementation)
             .map(|v| v >= min_version)
@@ -3768,12 +3768,12 @@ impl Relay {
             Account::new(key_address, provider).delegation_status(&self.inner.storage).await.ok()
         };
 
-        // Only wrap if it's an IthacaAccount >=0.5
+        // Only wrap if it's an GridAccount >=0.5
         let needs_wrapping = status.as_ref().is_some_and(|s| {
             if (s.is_delegated() || (s.is_stored() && request.from == Some(key_address)))
                 && let Ok(impl_addr) = s.try_implementation()
             {
-                return self.is_ithaca_account(impl_addr, semver::Version::new(0, 5, 0));
+                return self.is_grid_account(impl_addr, semver::Version::new(0, 5, 0));
             }
             false
         });
