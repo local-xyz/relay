@@ -33,7 +33,9 @@ jobs:
           push: false
           outputs: type=docker,dest=/tmp/relay-image.tar
           build-args: BUILD_PROFILE=release
-          tags: ghcr.io/local-xyz/grid-relay:${{ steps.version.outputs.sha }}
+          tags: |
+            ghcr.io/local-xyz/relay:${{ steps.version.outputs.sha }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('ghcr.io/local-xyz/relay:{0}', github.ref_name) || '' }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/local-xyz/relay
@@ -48,8 +50,10 @@ jobs:
           retention-days: 3
       - name: Publish candidate
         env:
-          IMAGE: ghcr.io/local-xyz/grid-relay:${{ steps.version.outputs.sha }}
+          IMAGE: ghcr.io/local-xyz/relay:${{ steps.version.outputs.sha }}
+          VERSION_IMAGE: ${{ startsWith(github.ref, 'refs/tags/v') && format('ghcr.io/local-xyz/relay:{0}', github.ref_name) || '' }}
         run: |
           docker load --input /tmp/relay-image.tar
           docker push "$IMAGE"
+          if [ -n "$VERSION_IMAGE" ]; then docker push "$VERSION_IMAGE"; fi
           docker inspect "$IMAGE" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
