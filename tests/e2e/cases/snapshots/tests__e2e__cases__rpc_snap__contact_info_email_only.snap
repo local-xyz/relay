@@ -3,5 +3,6 @@ source: tests/e2e/cases/rpc_snap.rs
 expression: contact_email_only
 ---
 {
-  "email": "emailonly@example.com"
+  "email": "emailonly@example.com",
+  "emailVerifiedAt": "[email_timestamp]"
 }

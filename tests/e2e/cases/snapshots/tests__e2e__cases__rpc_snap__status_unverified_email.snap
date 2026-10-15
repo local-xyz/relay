@@ -2,6 +2,4 @@
 source: tests/e2e/cases/rpc_snap.rs
 expression: status_unverified_email
 ---
-{
-  "email": "[email_timestamp]"
-}
+{}

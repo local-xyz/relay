@@ -564,15 +564,14 @@ async fn test_onramp() -> eyre::Result<()> {
         .onramp_status(OnrampStatusParameters { address: email_only_addr })
         .await?;
 
+    // `email` is the verification time: an email that is only pending has none.
     assert!(
-        status_unverified_email.email.is_some(),
-        "Email timestamp (created_at) should be present for unverified email"
+        status_unverified_email.email.is_none(),
+        "Email timestamp should be absent for an unverified email"
     );
     assert!(status_unverified_email.phone.is_none(), "Phone should be None");
 
-    insta::assert_json_snapshot!("status_unverified_email", status_unverified_email, {
-        ".email" => "[email_timestamp]",
-    });
+    insta::assert_json_snapshot!("status_unverified_email", status_unverified_email);
 
     let contact_unverified_email = env
         .relay_endpoint
@@ -613,7 +612,9 @@ async fn test_onramp() -> eyre::Result<()> {
     assert_eq!(contact_email_only.email.as_deref(), Some(email_only));
     assert!(contact_email_only.phone.is_none());
 
-    insta::assert_json_snapshot!("contact_info_email_only", contact_email_only);
+    insta::assert_json_snapshot!("contact_info_email_only", contact_email_only, {
+        ".emailVerifiedAt" => "[email_timestamp]",
+    });
 
     // Test with unverified account (no email/phone data)
     let unverified_addr = Address::random();
