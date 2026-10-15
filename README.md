@@ -334,4 +334,4 @@ cargo test test_multichain
 
 ## Deploying
 
-The release workflow builds a candidate image at `ghcr.io/local-xyz/grid-relay:<short-commit>`. After integration tests pass, promote the candidate digest to a release tag. See [Grid integration notes](docs/grid.md). 
+Images are published to `ghcr.io/local-xyz/relay`. The `docker` workflow builds linux/amd64 and linux/arm64; a `v*` tag publishes `<tag>`, `latest`, and the short commit, and a manual run publishes only the short commit as a candidate. Test a candidate with Grid before tagging. See [Grid integration notes](docs/grid.md).

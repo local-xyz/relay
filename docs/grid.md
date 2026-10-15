@@ -11,7 +11,7 @@ This repository starts at Ithaca relay commit `bbbaf3f7ac50a3cf886cf9544733b317f
 - Restore verified-email evidence from Grid commit `d673e498`: pending emails must not count as verified. Both memory and PostgreSQL storage are covered.
 - Enable PostgreSQL TLS from Grid commit `1e7c8bda` for encrypted database connections.
 - Update only the upstream lockfile packages with security fixes (TLS, AWS-LC, bytes, h2, rand, ruint, time, and crossbeam), retaining compatible dependency ranges. Two maintenance-only advisories remain documented in `deny.toml`; no vulnerability advisory is suppressed.
-- Use LocalProtocol's identity domain by default. Releases are published as `ghcr.io/local-xyz/relay:<version>` and `ghcr.io/local-xyz/relay:latest` (linux/amd64 and linux/arm64); the `docker` workflow's commit-tagged candidates go to `ghcr.io/local-xyz/grid-relay`.
+- Use LocalProtocol's identity domain by default. Every image is published to `ghcr.io/local-xyz/relay` (linux/amd64 and linux/arm64): releases as `<version>` and `latest`, candidates as the short commit.
 
 The upstream transaction, quote, gas estimation, and settlement algorithms are retained.
 
@@ -48,12 +48,19 @@ cargo e2e -- --locked --test tests -E 'test(e2e::cases::simple::) | test(e2e::ca
 
 The two skipped unit tests query an external Ithaca mainnet RPC. Local account tests deploy the pinned account contracts to isolated Anvil instances.
 
-The `docker` workflow publishes only a commit tag. It does not move `latest` or an existing version tag until the candidate has been tested with Grid. The package must grant this repository Actions access with write permission. Image source and revision labels identify the standalone relay repository and commit.
+The `docker` workflow publishes to `ghcr.io/local-xyz/relay`. A manual run (`workflow_dispatch`) publishes only the short commit, so a candidate can be tested with Grid without moving `latest` or any version tag. Pushing a `v*` tag publishes `<tag>`, `latest`, and the short commit. The package must grant this repository Actions access with write permission. Image source and revision labels identify the standalone relay repository and commit.
 
 Grid can select a candidate without changing its defaults:
 
 ```sh
-RELAY_IMAGE=ghcr.io/local-xyz/grid-relay VITE_RELAY_VERSION=<short-commit> VITE_DEFAULT_ENV=anvil pnpm test --run packages/account/src/viem/RelayActions.test.ts
+VITE_RELAY_VERSION=<short-commit> VITE_DEFAULT_ENV=anvil pnpm test --run packages/account/src/viem/RelayActions.test.ts
 ```
 
-If GHCR has not granted the new repository write access, the release job still saves `relay-image-<full-commit>` before its publish step. An authorized maintainer can download that artifact, load `relay-image.tar` with Docker, and push the commit tag using their existing GHCR login. This keeps publishing credentials out of repository secrets.
+If the package has not granted this repository write access, the publish step fails. Grant it under the package's settings (Manage Actions access, `local-xyz/relay`, write), or publish from a machine with a GHCR login:
+
+```sh
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg BUILD_PROFILE=release \
+  -t ghcr.io/local-xyz/relay:v<version> -t ghcr.io/local-xyz/relay:latest --push .
+```
+
+This keeps publishing credentials out of repository secrets.
