@@ -334,4 +334,4 @@ cargo test test_multichain
 
 ## Deploying
 
-The release workflow builds a candidate image at `ghcr.io/local-xyz/grid-relay:<short-commit>`. After integration tests pass, promote the candidate digest to a release tag. See [Grid integration notes](docs/grid.md). 
+The release workflow builds a candidate image at `ghcr.io/local-xyz/relay:<short-commit>`. After integration tests pass, promote the candidate digest to a release tag. See [Grid integration notes](docs/grid.md). 
