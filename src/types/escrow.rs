@@ -56,6 +56,18 @@ sol! {
     #[sol(rpc)]
     #[derive(Debug)]
     contract IEscrow {
+        /// The escrow is invalid.
+        error InvalidEscrow();
+        /// The refund is invalid.
+        error RefundInvalid();
+        /// The settlement is invalid.
+        error SettlementInvalid();
+
+        /// Emitted when an escrow is refunded to its depositor.
+        event EscrowRefundedDepositor(bytes32 escrowId);
+        /// Emitted when an escrow is refunded to its recipient.
+        event EscrowRefundedRecipient(bytes32 escrowId);
+
         /// Emitted when an escrow is created.
         event EscrowCreated(bytes32 escrowId);
 

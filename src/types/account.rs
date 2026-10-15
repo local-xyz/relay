@@ -62,7 +62,9 @@ sol! {
             /// Per month.
             Month,
             /// Per year.
-            Year
+            Year,
+            /// No recurring reset.
+            Forever
         }
 
 
@@ -89,8 +91,27 @@ sol! {
         /// The key does not exist.
         error KeyDoesNotExist();
 
-        /// The `opData` is too short.
+        /// Legacy accounts report short operation data with this error.
         error OpDataTooShort();
+
+        /// The operation data is invalid.
+        error OpDataError();
+        /// The public key encoding is invalid.
+        error InvalidPublicKey();
+        /// The new implementation cannot be zero.
+        error NewImplementationIsZero();
+        /// The paymaster nonce is invalid.
+        error PaymasterNonceError();
+        /// The key store is full.
+        error ExceedsCapacity();
+        /// The requested key index is out of bounds.
+        error IndexOutOfBounds();
+        /// The nonce is invalid.
+        error InvalidNonce();
+        /// The new sequence must be larger than the current sequence.
+        error NewSequenceMustBeLarger();
+        /// The key cannot execute this call.
+        error UnauthorizedCall(bytes32 keyHash, address target, bytes data);
 
         /// @dev The `keyType` cannot be super admin.
         error KeyTypeCannotBeSuperAdmin();
@@ -543,5 +564,16 @@ impl DelegationStatus {
     /// Returns true if the account is not delegated on-chain or in storage
     pub fn is_unknown(&self) -> bool {
         matches!(self, DelegationStatus::None { .. })
+    }
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    #[test]
+    fn forever_spend_period_decodes_from_account_contract() {
+        use alloy::sol_types::SolValue;
+        let encoded = alloy::primitives::U256::from(6).abi_encode();
+        let period = super::IthacaAccount::SpendPeriod::abi_decode(&encoded).unwrap();
+        assert_eq!(serde_json::to_value(period).unwrap(), "forever");
     }
 }

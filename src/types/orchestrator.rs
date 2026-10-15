@@ -42,6 +42,15 @@ sol! {
         /// `err` will be stored for retrieval with `nonceStatus`.
         event IntentExecuted(address indexed eoa, uint256 indexed nonce, bool incremented, bytes4 err);
 
+        /// The intent deadline has passed.
+        error IntentExpired();
+        /// Simulation completed, returning the gas used.
+        error SimulationPassed(uint256 gUsed);
+        /// The simulation state override is invalid.
+        error StateOverrideError();
+        /// The account implementation is unsupported.
+        error UnsupportedAccountImplementation();
+
         /// @dev Unable to perform the payment.
         error PaymentError();
 

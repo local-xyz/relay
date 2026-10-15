@@ -32,7 +32,9 @@ sol! {
         /// A passkey.
         WebAuthnP256,
         /// An Ethereum key.
-        Secp256k1
+        Secp256k1,
+        /// A contract-backed external key.
+        External
     }
 
     /// A key that can be used to authorize call.
@@ -503,6 +505,14 @@ pub fn normalize_p256_s(signature: Bytes) -> Bytes {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_key_type_decodes_from_account_contract() {
+        use alloy::sol_types::SolValue;
+        let encoded = alloy::primitives::U256::from(3).abi_encode();
+        let key_type = super::KeyType::abi_decode(&encoded).unwrap();
+        assert_eq!(serde_json::to_value(key_type).unwrap(), "external");
+    }
+
     use super::{Key, KeyType};
     use crate::types::U40;
     use alloy::{
