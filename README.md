@@ -1,4 +1,6 @@
-# Ithaca Relay
+# Grid Relay
+
+A fork of [Ithaca relay](https://github.com/ithacaxyz/relay), retaining its full history through `bbbaf3f7ac50a3cf886cf9544733b317f03fdca9` (v26.1.4). See [the Grid integration notes](docs/grid.md) for the small compatibility patches, email configuration, and release process.
 
 A transparent cross-chain transaction router for EIP-7702 accounts, specifically built for [Porto](https://github.com/ithacaxyz/porto).
 
@@ -35,7 +37,7 @@ These things must be enabled in the configuration.
 
 ### Deployment
 
-1. Deploy the [delegation and orchestrator contracts](https://github.com/ithacaxyz/account) on the destination chain.
+1. Deploy the [delegation and orchestrator contracts](https://github.com/local-xyz/account-contracts) on the destination chain.
 1. Deploy or identify at least one token to accept as fee token(s).
 1. Generate two private keys, one for transaction signing, and one for quote signing. You can do this with `cast wallet new`.
 
@@ -280,13 +282,13 @@ cargo test
 
 ### End-to-End
 
-End-to-end tests use [ithacaxyz/account](https://github.com/ithacaxyz/account) under a git submodule located at `tests/account`. These tests depend on building certain these contracts.
+End-to-end tests use [local-xyz/account-contracts](https://github.com/local-xyz/account-contracts) under a git submodule located at `tests/account`. These tests depend on building certain these contracts.
 
 #### Prerequisites
 
 - Make sure [`forge`](https://getfoundry.sh/) is installed and available in your PATH.
 - Make sure [`cargo-nextest`](https://nexte.st/) is installed an available in your PATH.
-- Pull `ithacaxyz/account`
+- Pull `local-xyz/account-contracts` (requires organization access)
 
    ```bash
    git submodule update --init --recursive
@@ -332,4 +334,4 @@ cargo test test_multichain
 
 ## Deploying
 
-A docker image is built and pushed to GitHub Packages (`ghcr.io/ithacaxyz/relay`) when a git tag (`vx.y.z`) is pushed to the repository. 
+The release workflow builds a candidate image at `ghcr.io/local-xyz/grid-relay:<short-commit>`. After integration tests pass, promote the candidate digest to a release tag. See [Grid integration notes](docs/grid.md). 

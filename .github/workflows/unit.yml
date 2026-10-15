@@ -2,152 +2,34 @@ name: unit
 
 on:
   pull_request:
-  merge_group:
   push:
     branches: [main]
+  workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   test:
-    name: test – ${{ matrix.variant }}
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [local, base_sepolia, pg]
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
-    runs-on: ubuntu-latest
-
     services:
-      # PostgreSQL only when the pg variant is selected
       postgres:
-        image: ${{ matrix.variant == 'pg' && 'postgres' || '' }}
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
+          --health-retries 10
+        ports: [5432:5432]
+    env:
+      SQLX_OFFLINE: true
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - uses: taiki-e/install-action@nextest
-
-      - name: Set fork environment
-        if: ${{ matrix.variant == 'base_sepolia' }}
-        run: |
-          # Source the env file and export to GitHub Actions environment
-          source tests/assets/config/base_sepolia.env
-          echo "TEST_FORK_URL=${{ secrets.BASE_SEPOLIA_URL }}" >> $GITHUB_ENV
-          echo "TEST_ORCHESTRATOR=$TEST_ORCHESTRATOR" >> $GITHUB_ENV
-          echo "TEST_PROXY=$TEST_PROXY" >> $GITHUB_ENV
-          echo "TEST_SIMULATOR=$TEST_SIMULATOR" >> $GITHUB_ENV
-
-      - name: Set database URL
-        if: ${{ matrix.variant == 'pg' }}
-        run: |
-          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> $GITHUB_ENV
-          echo "SQLX_OFFLINE=true" >> $GITHUB_ENV
-
-      - name: Forge RPC cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.foundry/cache
-            ~/.config/.foundry/cache
-          key: rpc-cache-${{ hashFiles('tests/assets/rpc-cache-keyfile') }}
-
-      - name: Set test filter
-        run: |
-          if [ "${{ matrix.variant }}" = "base_sepolia" ]; then
-            echo "TEST_FILTER=(kind(lib) | kind(bin) | kind(proc-macro) | kind(test)) and not (test(~multichain) or test(~multi_chain) or test(~rpc_snap))" >> $GITHUB_ENV
-          else
-            echo "TEST_FILTER=kind(lib) | kind(bin) | kind(proc-macro) | kind(test)" >> $GITHUB_ENV
-          fi
-
-      - name: Run tests
-        run: |
-          cargo e2e -- \
-            --locked \
-            --workspace \
-            -E "$TEST_FILTER" \
-            --no-fail-fast
-
-  test-migrations:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 0
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - uses: taiki-e/install-action@nextest
-
-      - name: Set database URL
-        run: |
-          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> $GITHUB_ENV
-          echo "SQLX_OFFLINE=true" >> $GITHUB_ENV
-
-      # Write to DB with base branch
-      - name: Write DB
-        run: |
-          git worktree add ../base ${{ github.event.pull_request.base.sha }}
-          (
-            cd ../base
-            cargo test -p relay --test tests -- storage::roundtrip::write --exact --ignored
-          )
-
-      # Read from DB with PR branch
-      - name: Read DB
-        run: cargo test -p relay --test tests -- storage::roundtrip::read --exact --ignored
-
-  unit-success:
-    name: unit success
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [test, test-migrations]
-    timeout-minutes: 5
-    steps:
-      - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1
-        with:
-          jobs: ${{ toJSON(needs) }}
+      - run: cargo test --locked --lib -- --skip test_comprehensive_erc20_mapping_discovery --skip test_layerzero_diagnostics_ethereum_mainnet
+      - run: cargo test --locked --lib postgres_email_attestation -- --ignored

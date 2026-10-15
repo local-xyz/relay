@@ -1,7 +1,7 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.95.0 AS chef
 WORKDIR /app
 
-LABEL org.opencontainers.image.source=https://github.com/ithacaxyz/relay
+LABEL org.opencontainers.image.source=https://github.com/local-xyz/relay
 
 # Builds a cargo-chef plan
 FROM chef AS planner
@@ -13,11 +13,11 @@ COPY --from=planner /app/recipe.json recipe.json
 
 # Build profile, maxperf by default
 ARG BUILD_PROFILE=maxperf
-ENV BUILD_PROFILE $BUILD_PROFILE
+ENV BUILD_PROFILE=$BUILD_PROFILE
 
 # Extra Cargo features
 ARG FEATURES=""
-ENV FEATURES $FEATURES
+ENV FEATURES=$FEATURES
 
 # Install system dependencies
 RUN apt-get update && apt-get -y upgrade && apt-get install -y libclang-dev pkg-config
@@ -39,7 +39,7 @@ RUN cargo build --profile $BUILD_PROFILE --features "$FEATURES" --locked --bin r
 RUN cp /app/target/$BUILD_PROFILE/relay /app/relay
 
 # Use Ubuntu as the release image
-FROM ubuntu AS runtime
+FROM ubuntu:24.04 AS runtime
 WORKDIR /app
 
 # Install runtime dependencies
