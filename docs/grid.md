@@ -50,6 +50,8 @@ The two skipped unit tests query an external Ithaca mainnet RPC. Local account t
 
 The `docker` workflow publishes to `ghcr.io/local-xyz/relay`. A manual run (`workflow_dispatch`) publishes only the short commit, so a candidate can be tested with Grid without moving `latest` or any version tag. Pushing a `v*` tag publishes `<tag>`, `latest`, and the short commit. The package must grant this repository Actions access with write permission. Image source and revision labels identify the standalone relay repository and commit.
 
+Each platform builds natively (`ubuntu-24.04` for amd64, `ubuntu-24.04-arm` for arm64) and pushes an untagged image by digest; the `publish` job then assembles the tagged multi-arch index from the two digests. Emulating arm64 under QEMU exceeded 90 minutes for the release profile, so the workflow does not use it. The untagged per-platform manifests the index references must not be deleted from the package.
+
 Grid can select a candidate without changing its defaults:
 
 ```sh
