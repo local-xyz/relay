@@ -363,7 +363,7 @@ impl AssetDiffsBuilder {
 
     /// Returns an iterator over seen nfts.
     pub fn seen_nfts(&self) -> impl Iterator<Item = (Address, U256)> {
-        self.per_account.iter().flat_map(|(_, changes)| {
+        self.per_account.values().flat_map(|changes| {
             changes
                 .non_fungible
                 .iter()

@@ -73,14 +73,12 @@ fn compile_legacy_contracts(sh: &mut Shell) -> anyhow::Result<()> {
     // only install accounts v0.4.6 if the lib/accountv4 path does not exist
     if !sh.path_exists(&accounts_v4_path) {
         println!("Installing account v0.4.6...");
-        cmd!(sh, "forge install --no-git --shallow accountv4=ithacaxyz/account@v0.4.6").run()?;
-
-        println!("Building v0.4.6 contracts...");
-        let _dir = sh.push_dir(accounts_v4_path);
-        cmd!(sh, "forge build").run()?;
-    } else {
-        println!("account v0.4.6 already exists!");
+        cmd!(sh, "git clone --depth 1 --branch v0.4.6 --recurse-submodules --shallow-submodules https://github.com/ithacaxyz/account.git lib/accountv4").run()?;
     }
+
+    println!("Building v0.4.6 contracts...");
+    let _dir = sh.push_dir(accounts_v4_path);
+    cmd!(sh, "forge build").run()?;
 
     Ok(())
 }

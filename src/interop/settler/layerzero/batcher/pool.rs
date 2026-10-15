@@ -186,14 +186,11 @@ impl LayerZeroBatchPool {
             .map(|pending| {
                 let total = pending.len();
                 let mut messages = Vec::with_capacity(MAX_SETTLEMENTS_PER_BATCH.min(total));
-                let mut current_nonce = highest_nonce + 1;
-
-                for _ in 0..MAX_SETTLEMENTS_PER_BATCH {
+                for current_nonce in (highest_nonce + 1..).take(MAX_SETTLEMENTS_PER_BATCH) {
                     let Some(entry) = pending.get(&current_nonce) else {
                         break;
                     };
                     messages.push(entry.message.clone());
-                    current_nonce += 1;
                 }
                 PendingBatch::new(messages, total)
             })

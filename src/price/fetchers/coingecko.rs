@@ -54,7 +54,7 @@ impl CoinGecko {
             return;
         }
         let mut assets: HashMap<String, Vec<AssetUid>> = HashMap::new();
-        for (uid, _) in config.chains.iter().flat_map(|(_, chain)| chain.assets.iter()) {
+        for (uid, _) in config.chains.values().flat_map(|chain| chain.assets.iter()) {
             let remapped = config
                 .pricefeed
                 .coingecko

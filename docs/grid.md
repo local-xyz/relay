@@ -9,6 +9,7 @@ This repository starts at Ithaca relay commit `bbbaf3f7ac50a3cf886cf9544733b317f
 - Restore the configurable email sender and CLI/config-only environment handling from Grid commit `029d3501`. Resend keys are excluded from saved configuration.
 - Restore verified-email evidence from Grid commit `d673e498`: pending emails must not count as verified. Both memory and PostgreSQL storage are covered.
 - Enable PostgreSQL TLS from Grid commit `1e7c8bda` for encrypted database connections.
+- Update only the upstream lockfile packages with security fixes (TLS, AWS-LC, bytes, h2, rand, ruint, time, and crossbeam), retaining compatible dependency ranges. Two maintenance-only advisories remain documented in `deny.toml`; no vulnerability advisory is suppressed.
 - Use LocalProtocol's identity domain by default and publish from this repository to the existing private `ghcr.io/local-xyz/grid-relay` package.
 
 The upstream transaction, quote, gas estimation, and settlement algorithms are retained.
@@ -53,3 +54,5 @@ Grid can select a candidate without changing its defaults:
 ```sh
 RELAY_IMAGE=ghcr.io/local-xyz/grid-relay VITE_RELAY_VERSION=<short-commit> VITE_DEFAULT_ENV=anvil pnpm test --run packages/account/src/viem/RelayActions.test.ts
 ```
+
+If GHCR has not granted the new repository write access, the release job still saves `relay-image-<full-commit>` before its publish step. An authorized maintainer can download that artifact, load `relay-image.tar` with Docker, and push the commit tag using their existing GHCR login. This keeps publishing credentials out of repository secrets.

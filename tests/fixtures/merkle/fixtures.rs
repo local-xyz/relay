@@ -84,11 +84,8 @@ fn test_lazy_compact_merkle_tree_with_murky_fixtures() {
                         .push(format!("Single leaf tree should return leaf as root, got {root:?}"));
                 }
             }
-            "empty_tree" => {
-                // Empty tree should return None for root
-                if test_case.leaves.is_empty() && tree.root().is_ok() {
-                    failures.push("Empty tree should return None for root".to_string());
-                }
+            "empty_tree" if test_case.leaves.is_empty() && tree.root().is_ok() => {
+                failures.push("Empty tree should return None for root".to_string());
             }
             _ => {}
         }

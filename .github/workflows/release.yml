@@ -30,7 +30,8 @@ jobs:
           context: .
           file: Dockerfile
           platforms: linux/amd64
-          push: true
+          push: false
+          outputs: type=docker,dest=/tmp/relay-image.tar
           build-args: BUILD_PROFILE=release
           tags: ghcr.io/local-xyz/grid-relay:${{ steps.version.outputs.sha }}
           labels: |
@@ -38,7 +39,17 @@ jobs:
             org.opencontainers.image.source=https://github.com/local-xyz/relay
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Record image identity
+      - name: Save candidate for verification and manual publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-image-${{ github.sha }}
+          path: /tmp/relay-image.tar
+          compression-level: 0
+          retention-days: 3
+      - name: Publish candidate
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: echo "ghcr.io/local-xyz/grid-relay@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          IMAGE: ghcr.io/local-xyz/grid-relay:${{ steps.version.outputs.sha }}
+        run: |
+          docker load --input /tmp/relay-image.tar
+          docker push "$IMAGE"
+          docker inspect "$IMAGE" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"

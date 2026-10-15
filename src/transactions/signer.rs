@@ -814,14 +814,10 @@ impl Signer {
                 let block_time = self.block_time.as_millis();
 
                 // Firsly try guessing the block based on block time.
-                let first_guess = if block_time == 0 {
-                    included_at_block
-                } else {
-                    included_at_block.saturating_sub(
-                        ((included_at.saturating_sub(submitted_at)) as u128 * 1000 / block_time)
-                            as u64,
-                    )
-                };
+                let elapsed_blocks = ((included_at.saturating_sub(submitted_at)) as u128 * 1000)
+                    .checked_div(block_time)
+                    .unwrap_or_default();
+                let first_guess = included_at_block.saturating_sub(elapsed_blocks as u64);
 
                 // Follow the chain until we find a block after the submission time.
                 let mut block = self.provider.get_block(first_guess.into()).await.ok().flatten()?;

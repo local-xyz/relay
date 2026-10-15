@@ -730,6 +730,7 @@ impl Environment {
             .with_legacy_orchestrators(&[contracts.legacy_orchestrator])
             .with_legacy_delegation_proxies(&[contracts.legacy_delegation_proxy])
             .with_resend_api_key(Some("test_resend_key".to_string()))
+            .with_email_sender(Some("Relay tests <no-reply@example.com>".to_string()))
             .with_onramp_worker_secret(Some("test_onramp_secret".to_string()));
 
         let relay_handle = try_spawn(config.clone(), skip_diagnostics).await?;

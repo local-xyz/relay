@@ -341,12 +341,7 @@ impl RelayConfig {
         };
         let Some(rebalance_service) = self.rebalance_service.as_mut() else { return self };
 
-        if rebalance_service.binance.is_none() {
-            rebalance_service.binance = Some(BinanceBridgeConfig { api_key, api_secret });
-        } else {
-            rebalance_service.binance.as_mut().unwrap().api_key = api_key;
-            rebalance_service.binance.as_mut().unwrap().api_secret = api_secret;
-        }
+        rebalance_service.binance = Some(BinanceBridgeConfig { api_key, api_secret });
 
         self
     }

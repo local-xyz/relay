@@ -486,8 +486,7 @@ mod tests {
         let error = timeout(Duration::from_secs(5), PgConnection::connect_with(&options))
             .await
             .unwrap()
-            .err()
-            .expect("a non-TLS server must be rejected");
+            .expect_err("a non-TLS server must be rejected");
         assert!(error.to_string().contains("server does not support TLS"), "{error}");
         timeout(Duration::from_secs(5), server).await.unwrap().unwrap();
     }
