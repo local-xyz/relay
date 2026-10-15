@@ -18,6 +18,9 @@ pub enum Permission {
     /// Spend permission.
     #[serde(rename = "spend")]
     Spend(SpendPermission),
+    /// Signature verification permission.
+    #[serde(rename = "signatureVerification")]
+    SignatureVerification(SignatureVerificationPermission),
 }
 
 impl From<CallPermission> for Permission {
@@ -30,6 +33,23 @@ impl From<SpendPermission> for Permission {
     fn from(perm: SpendPermission) -> Self {
         Permission::Spend(perm)
     }
+}
+
+impl From<SignatureVerificationPermission> for Permission {
+    fn from(perm: SignatureVerificationPermission) -> Self {
+        Permission::SignatureVerification(perm)
+    }
+}
+
+/// Represents a signature verification permission.
+///
+/// Approves a set of contracts as ERC-1271 signature checkers for a key, i.e. the account will
+/// return the ERC-1271 magic value for signatures produced by the key only when `isValidSignature`
+/// is called by one of these addresses.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SignatureVerificationPermission {
+    /// The addresses of the approved signature checkers.
+    pub addresses: Vec<Address>,
 }
 
 /// Represents spend permissions.
@@ -52,8 +72,22 @@ impl From<SpendInfo> for SpendPermission {
 
 #[cfg(test)]
 mod tests {
+    use super::{Permission, SignatureVerificationPermission};
     use crate::types::CallPermission;
-    use alloy::primitives::{Address, fixed_bytes};
+    use alloy::primitives::{Address, address, fixed_bytes};
+
+    #[test]
+    fn signature_verification_permission_roundtrip() {
+        let json = r#"{"type":"signatureVerification","addresses":["0x000000000000000000000000000000000000c0de"]}"#;
+        let permission = serde_json::from_str::<Permission>(json).unwrap();
+        assert_eq!(
+            permission,
+            Permission::SignatureVerification(SignatureVerificationPermission {
+                addresses: vec![address!("0x000000000000000000000000000000000000c0de")],
+            })
+        );
+        assert_eq!(serde_json::to_string(&permission).unwrap(), json);
+    }
 
     #[test]
     fn deserialize_call_permission() {

@@ -10,12 +10,13 @@ use relay::{
     rpc::RelayApiClient,
     signers::Eip712PayLoadSigner,
     types::{
-        Call, CallPermission,
+        Call, CallPermission, GridAccount,
         GridAccount::SpendPeriod,
         KeyType, KeyWith712Signer,
         rpc::{
             AuthorizeKey, AuthorizeKeyResponse, Meta, Permission, PrepareCallsCapabilities,
-            PrepareCallsParameters, SendPreparedCallsParameters, SpendPermission,
+            PrepareCallsParameters, SendPreparedCallsParameters, SignatureVerificationPermission,
+            SpendPermission,
         },
     },
 };
@@ -76,6 +77,170 @@ async fn get_keys() -> eyre::Result<()> {
 
         assert_eq!(env.get_eoa_authorized_keys().await?, expected_responses[..(i + 2)]);
     }
+
+    Ok(())
+}
+
+/// Authorizes a session key with a `signatureVerification` permission as part of the account
+/// upgrade, and ensures the checker is approved on-chain and reported by `wallet_getKeys`.
+#[tokio::test(flavor = "multi_thread")]
+async fn signature_verification_permission() -> eyre::Result<()> {
+    let env = Environment::setup().await?;
+    let checker = Address::random();
+
+    let admin_key = KeyWith712Signer::random_admin(KeyType::Secp256k1)?.unwrap();
+    let session_key =
+        KeyWith712Signer::random_session(KeyType::P256)?.unwrap().with_permissions(vec![
+            Permission::Call(CallPermission {
+                to: env.erc20,
+                selector: MockErc20::transferCall::SELECTOR.into(),
+            }),
+            Permission::SignatureVerification(SignatureVerificationPermission {
+                addresses: vec![checker],
+            }),
+        ]);
+
+    // Both keys are authorized in the upgrade itself, i.e. `wallet_prepareUpgradeAccount`.
+    upgrade_account_eagerly(
+        &env,
+        &[admin_key.to_authorized(), session_key.to_authorized()],
+        &admin_key,
+        AuthKind::Auth,
+    )
+    .await?;
+
+    // The checker is approved on-chain.
+    let account = GridAccount::new(env.eoa.address(), env.provider());
+    assert_eq!(
+        account.approvedSignatureCheckers(session_key.key_hash()).call().await?,
+        vec![checker]
+    );
+
+    // And `wallet_getKeys` round-trips the permission.
+    assert_eq!(
+        env.get_eoa_authorized_keys().await?,
+        vec![
+            AuthorizeKeyResponse {
+                hash: admin_key.key_hash(),
+                authorize_key: AuthorizeKey { key: admin_key.key().clone(), permissions: vec![] },
+            },
+            session_key.to_authorized().into_response(),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Authorizes a session key with a `signatureVerification` permission through a precall, and
+/// ensures the precall is accepted, keyed to the session key's nonce sequence, and applied once
+/// the session key sends its first intent.
+#[tokio::test(flavor = "multi_thread")]
+async fn signature_verification_precall() -> eyre::Result<()> {
+    let env = Environment::setup().await?;
+    let checker = Address::random();
+
+    let admin_key = KeyWith712Signer::random_admin(KeyType::Secp256k1)?.unwrap();
+    let session_key =
+        KeyWith712Signer::random_session(KeyType::P256)?.unwrap().with_permissions(vec![
+            Permission::Spend(SpendPermission {
+                limit: U256::MAX,
+                period: SpendPeriod::Day,
+                token: env.erc20,
+            }),
+            Permission::Call(CallPermission {
+                to: env.erc20,
+                selector: MockErc20::transferCall::SELECTOR.into(),
+            }),
+            Permission::SignatureVerification(SignatureVerificationPermission {
+                addresses: vec![checker],
+            }),
+        ]);
+    let seq_key = U256::from_be_bytes(session_key.key_hash().into()) >> 64 << 64;
+
+    upgrade_account_eagerly(&env, &[admin_key.to_authorized()], &admin_key, AuthKind::Auth).await?;
+
+    // Authorize the session key via precall.
+    TxContext {
+        authorization_keys: vec![&session_key],
+        pre_call: true,
+        key: Some(&admin_key),
+        // The checker approval must be recognised as a key operation so that the precall lands
+        // on the session key's nonce sequence.
+        quote: Some(Box::new(move |_, context| {
+            Box::pin(async move { assert_eq!(context.precall().unwrap().nonce, seq_key) })
+        })),
+        ..Default::default()
+    }
+    .process(1, &env)
+    .await?;
+
+    // Nothing is on-chain yet.
+    let account = GridAccount::new(env.eoa.address(), env.provider());
+    assert!(account.approvedSignatureCheckers(session_key.key_hash()).call().await?.is_empty());
+
+    // The first intent signed by the session key executes the precall.
+    TxContext {
+        calls: vec![Call::transfer(env.erc20, Address::ZERO, U256::from(1))],
+        expected: ExpectedOutcome::Pass,
+        key: Some(&session_key),
+        fee_token: Some(env.erc20),
+        ..Default::default()
+    }
+    .process(2, &env)
+    .await?;
+
+    assert_eq!(
+        account.approvedSignatureCheckers(session_key.key_hash()).call().await?,
+        vec![checker]
+    );
+
+    Ok(())
+}
+
+/// A session key must not be able to approve additional signature checkers for itself; only the
+/// account (admin) can.
+#[tokio::test(flavor = "multi_thread")]
+async fn signature_verification_session_key_cannot_self_approve() -> eyre::Result<()> {
+    let env = Environment::setup().await?;
+
+    let admin_key = KeyWith712Signer::random_admin(KeyType::Secp256k1)?.unwrap();
+    let session_key =
+        KeyWith712Signer::random_session(KeyType::P256)?.unwrap().with_permissions(vec![
+            Permission::Spend(SpendPermission {
+                limit: U256::MAX,
+                period: SpendPeriod::Day,
+                token: env.erc20,
+            }),
+            Permission::Call(CallPermission {
+                to: env.erc20,
+                selector: MockErc20::transferCall::SELECTOR.into(),
+            }),
+        ]);
+
+    upgrade_account_eagerly(
+        &env,
+        &[admin_key.to_authorized(), session_key.to_authorized()],
+        &admin_key,
+        AuthKind::Auth,
+    )
+    .await?;
+
+    // The session key tries to add a checker for itself in a regular intent.
+    TxContext {
+        calls: vec![Call {
+            to: env.eoa.address(),
+            ..Call::set_signature_checker_approval(session_key.key_hash(), Address::random(), true)
+        }],
+        expected: ExpectedOutcome::FailEstimate,
+        key: Some(&session_key),
+        fee_token: Some(env.erc20),
+        ..Default::default()
+    }
+    .process(1, &env)
+    .await?;
+
+    let account = GridAccount::new(env.eoa.address(), env.provider());
+    assert!(account.approvedSignatureCheckers(session_key.key_hash()).call().await?.is_empty());
 
     Ok(())
 }

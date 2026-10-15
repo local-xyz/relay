@@ -14,8 +14,8 @@ use crate::{
 
 use super::{
     GridAccount::{
-        SpendPeriod, removeSpendLimitCall, setCanExecuteCall, setSpendLimitCall,
-        upgradeProxyAccountCall,
+        SpendPeriod, removeSpendLimitCall, setCanExecuteCall, setSignatureCheckerApprovalCall,
+        setSpendLimitCall, upgradeProxyAccountCall,
     },
     IDelegation::{authorizeCall, revokeCall},
     Key,
@@ -85,6 +85,20 @@ impl Call {
     pub fn remove_spend_limit(key_hash: B256, token: Address, period: SpendPeriod) -> Self {
         Self::self_call(
             removeSpendLimitCall { keyHash: key_hash, token, period }.abi_encode().into(),
+        )
+    }
+
+    /// Create a call to approve or revoke `checker` as an ERC-1271 signature checker for
+    /// `key_hash`.
+    pub fn set_signature_checker_approval(
+        key_hash: B256,
+        checker: Address,
+        is_approved: bool,
+    ) -> Self {
+        Self::self_call(
+            setSignatureCheckerApprovalCall { keyHash: key_hash, checker, isApproved: is_approved }
+                .abi_encode()
+                .into(),
         )
     }
 
@@ -181,6 +195,10 @@ impl Call {
             removeSpendLimitCall::abi_decode(&self.data)
         {
             Some(keyHash)
+        } else if let Ok(setSignatureCheckerApprovalCall { keyHash, .. }) =
+            setSignatureCheckerApprovalCall::abi_decode(&self.data)
+        {
+            Some(keyHash)
         } else {
             None
         }
@@ -190,11 +208,40 @@ impl Call {
 /// All selectors allowed in precalls.
 ///
 /// When adding new entries, make sure to update [`Call::decode_precall_key_hash`], if applicable.
-const WHITELISTED_SELECTORS: [[u8; 4]; 6] = [
+const WHITELISTED_SELECTORS: [[u8; 4]; 7] = [
     authorizeCall::SELECTOR,
     revokeCall::SELECTOR,
     setCanExecuteCall::SELECTOR,
     setSpendLimitCall::SELECTOR,
     removeSpendLimitCall::SELECTOR,
+    setSignatureCheckerApprovalCall::SELECTOR,
     upgradeProxyAccountCall::SELECTOR,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signature_checker_approval_precall() {
+        let account = Address::random();
+        let key_hash = B256::random();
+        let checker = Address::random();
+        let call = Call::set_signature_checker_approval(key_hash, checker, true);
+
+        // Self-call via the ERC-7821 `address(0)` sentinel.
+        assert_eq!(call.to, Address::ZERO);
+        let decoded = setSignatureCheckerApprovalCall::abi_decode(&call.data).unwrap();
+        assert_eq!(decoded.keyHash, key_hash);
+        assert_eq!(decoded.checker, checker);
+        assert!(decoded.isApproved);
+
+        // Allowed in precalls, and attributed to the key it configures.
+        assert!(call.is_whitelisted_precall(account, Address::random()).unwrap());
+        assert_eq!(call.decode_precall_key_hash(), Some(key_hash));
+
+        // Not allowed when targeting anything other than the account itself.
+        let foreign = Call { to: Address::random(), ..call.clone() };
+        assert!(!foreign.is_whitelisted_precall(account, Address::random()).unwrap());
+    }
+}

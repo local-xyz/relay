@@ -1,6 +1,8 @@
 use super::{
-    Key, KeyHash, MULTICHAIN_NONCE_PREFIX_U192, OrchestratorContract::accountImplementationOfCall,
-    rpc::Permission, storage::CreatableAccount,
+    Key, KeyHash, MULTICHAIN_NONCE_PREFIX_U192,
+    OrchestratorContract::accountImplementationOfCall,
+    rpc::{Permission, SignatureVerificationPermission},
+    storage::CreatableAccount,
 };
 use crate::{
     error::{AuthError, RelayError},
@@ -28,6 +30,7 @@ use alloy::{
     transports::{TransportErrorKind, TransportResult},
     uint,
 };
+use futures_util::{future::try_join_all, try_join};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -165,6 +168,16 @@ sol! {
 
         /// Sets the ability of a key hash to execute a call with a function selector.
         function setCanExecute(bytes32 keyHash, address target, bytes4 fnSel, bool can);
+
+        /// Sets whether `checker` can use `isValidSignature` to successfully validate a signature
+        /// for a given key hash.
+        function setSignatureCheckerApproval(bytes32 keyHash, address checker, bool isApproved)
+            public
+            virtual
+            onlyThis;
+
+        /// Returns the list of approved signature checkers for `keyHash`.
+        function approvedSignatureCheckers(bytes32 keyHash) public view virtual returns (address[] memory);
 
         /// Returns spend and execute infos for each provided key hash in the same order.
         ///
@@ -415,14 +428,38 @@ impl<P: Provider> Account<P> {
     ) -> TransportResult<HashMap<B256, Vec<Permission>>> {
         debug!(eoa = %self.delegation.address(), "Fetching permissions");
 
-        let permissions = self
-            .delegation
-            .spendAndExecuteInfos(key_hashes.clone().collect())
-            .call()
-            .overrides(self.overrides.clone())
-            .await
-            .map_err(TransportErrorKind::custom)?
-            .into_permissions();
+        let (permissions, checkers) = try_join!(
+            async {
+                self.delegation
+                    .spendAndExecuteInfos(key_hashes.clone().collect())
+                    .call()
+                    .overrides(self.overrides.clone())
+                    .await
+                    .map_err(TransportErrorKind::custom)
+                    .map(|infos| infos.into_permissions())
+            },
+            try_join_all(key_hashes.clone().map(|key_hash| async move {
+                self.delegation
+                    .approvedSignatureCheckers(key_hash)
+                    .call()
+                    .overrides(self.overrides.clone())
+                    .await
+                    .map_err(TransportErrorKind::custom)
+            }))
+        )?;
+
+        let permissions = permissions
+            .into_iter()
+            .zip(checkers)
+            .map(|(mut permissions, addresses)| {
+                if !addresses.is_empty() {
+                    permissions.push(Permission::SignatureVerification(
+                        SignatureVerificationPermission { addresses },
+                    ));
+                }
+                permissions
+            })
+            .collect::<Vec<_>>();
 
         debug!(
             eoa = %self.delegation.address(),

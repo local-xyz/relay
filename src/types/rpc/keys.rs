@@ -53,16 +53,24 @@ impl AuthorizeKey {
     /// The third set of calls is to register the mapping from key id to account address in a
     /// registry.
     pub fn into_calls(mut self) -> Result<(Call, Vec<Call>), KeysError> {
+        let key_hash = self.key.key_hash();
         let mut calls = Vec::new();
 
-        calls.extend(self.permissions.drain(..).map(|perm| match perm {
-            Permission::Call(perm) => {
-                Call::set_can_execute(self.key.key_hash(), perm.to, perm.selector, true)
+        for perm in self.permissions.drain(..) {
+            match perm {
+                Permission::Call(perm) => {
+                    calls.push(Call::set_can_execute(key_hash, perm.to, perm.selector, true))
+                }
+                Permission::Spend(perm) => {
+                    calls.push(Call::set_spend_limit(key_hash, perm.token, perm.period, perm.limit))
+                }
+                Permission::SignatureVerification(perm) => {
+                    calls.extend(perm.addresses.into_iter().map(|checker| {
+                        Call::set_signature_checker_approval(key_hash, checker, true)
+                    }))
+                }
             }
-            Permission::Spend(perm) => {
-                Call::set_spend_limit(self.key.key_hash(), perm.token, perm.period, perm.limit)
-            }
-        }));
+        }
 
         Ok((Call::authorize(self.key), calls))
     }

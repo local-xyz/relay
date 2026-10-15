@@ -69,6 +69,12 @@ expression: response_value
             "period": "minute",
             "token": "0x0000000000000000000000000000000000000000",
             "type": "spend"
+          },
+          {
+            "addresses": [
+              "0x0000000000000000000000000000000000000000"
+            ],
+            "type": "signatureVerification"
           }
         ],
         "publicKey": "0x0000000000000000000000000000000000000000",
@@ -164,7 +170,7 @@ expression: response_value
     "publicKey": "0x0000000000000000000000000000000000000000",
     "type": "secp256k1"
   },
-  "signature": "0x6018e383fa88c32e685f686cd15ee8a2cff3751f9e4a3df2638cb26eefe0693a157703a794b2cbe946800db7886a21227ffdb05ca04859bb9d89ece7e603f26a1c",
+  "signature": "0xb56a61ee2fe81700123af2e6d2d506fc1eeb5c2abaabe4d6c56f096b080dcfe33fe88648ae5c9c59821eb63ec54353898377dff98300d19e84a0c4e8405b6f501c",
   "typedData": {
     "domain": {},
     "message": null,
