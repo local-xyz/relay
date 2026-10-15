@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select\n                floor(extract(epoch from verified_at))::bigint as timestamp\n            from emails\n            where address = $1\n            order by verified_at is not null desc, created_at desc\n            limit 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timestamp",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1786e963960ae433b276492e606bf75493c83774c174262491f85cc0fadb792a"
+}

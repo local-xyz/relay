@@ -49,4 +49,4 @@ pub const SIMULATEV1_NATIVE_ADDRESS: Address =
     address!("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
 /// The default porto base url
-pub const DEFAULT_PORTO_BASE_URL: &str = "id.porto.sh";
+pub const DEFAULT_PORTO_BASE_URL: &str = "id.localprotocol.xyz";

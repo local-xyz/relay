@@ -75,8 +75,10 @@ pub struct OnrampVerificationStatus {
 /// Contact information for onramp.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OnrampContactInfo {
-    /// Verified email address, or None if not verified.
+    /// Preferred email address; may be unverified. Check `email_verified_at` before use.
     pub email: Option<String>,
+    /// Verification time for the returned email, never its submission time.
+    pub email_verified_at: Option<u64>,
     /// Verified phone number, or None if not verified.
     pub phone: Option<String>,
     /// Unix timestamp (seconds) when phone was verified, or None if not verified.

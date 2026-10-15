@@ -43,7 +43,6 @@ struct PhoneKey {
 #[derive(Debug, Clone)]
 struct UnverifiedEmail {
     token: String,
-    created_at: DateTime<Utc>,
 }
 
 /// Value for unverified phone storage
@@ -227,10 +226,8 @@ impl StorageApi for InMemoryStorage {
     }
 
     async fn add_unverified_email(&self, account: Address, email: &str, token: &str) -> Result<()> {
-        self.unverified_emails.insert(
-            (account, email.to_string()),
-            UnverifiedEmail { token: token.to_string(), created_at: Utc::now() },
-        );
+        self.unverified_emails
+            .insert((account, email.to_string()), UnverifiedEmail { token: token.to_string() });
 
         Ok(())
     }
@@ -312,18 +309,9 @@ impl StorageApi for InMemoryStorage {
         &self,
         account: Address,
     ) -> Result<OnrampVerificationStatus> {
-        let email = self
-            .verified_emails
-            .iter()
-            .find_map(|entry| {
-                (entry.value().account == account)
-                    .then(|| entry.value().verified_at.timestamp() as u64)
-            })
-            .or_else(|| {
-                self.unverified_emails.iter().find_map(|entry| {
-                    (entry.key().0 == account).then(|| entry.value().created_at.timestamp() as u64)
-                })
-            });
+        let email = self.verified_emails.iter().find_map(|entry| {
+            (entry.value().account == account).then(|| entry.value().verified_at.timestamp() as u64)
+        });
 
         Ok(OnrampVerificationStatus {
             email,
@@ -338,13 +326,21 @@ impl StorageApi for InMemoryStorage {
         let email = self
             .verified_emails
             .iter()
-            .find_map(|entry| (entry.value().account == account).then(|| entry.key().clone()))
+            .find_map(|entry| {
+                (entry.value().account == account).then(|| {
+                    (entry.key().clone(), Some(entry.value().verified_at.timestamp() as u64))
+                })
+            })
             .or_else(|| {
                 // Get unverified emails for this account
                 self.unverified_emails
                     .iter()
                     .filter_map(|entry| {
-                        if entry.key().0 == account { Some(entry.key().1.clone()) } else { None }
+                        if entry.key().0 == account {
+                            Some((entry.key().1.clone(), None))
+                        } else {
+                            None
+                        }
                     })
                     .last()
             });
@@ -355,7 +351,8 @@ impl StorageApi for InMemoryStorage {
         });
 
         Ok(OnrampContactInfo {
-            email,
+            email_verified_at: email.as_ref().and_then(|(_, verified_at)| *verified_at),
+            email: email.map(|(email, _)| email),
             phone: phone_entry.as_ref().map(|(phone, _)| phone.clone()),
             phone_verified_at: phone_entry.map(|(_, timestamp)| timestamp),
         })

@@ -254,6 +254,12 @@ impl RelayConfig {
         self
     }
 
+    /// Sets the sender of verification emails.
+    pub fn with_email_sender(mut self, sender: Option<String>) -> Self {
+        self.email.sender = sender.or(self.email.sender);
+        self
+    }
+
     /// Sets the onramp worker secret.
     pub fn with_onramp_worker_secret(mut self, secret: Option<String>) -> Self {
         self.secrets.onramp_worker_secret = secret.or(self.secrets.onramp_worker_secret);
@@ -671,10 +677,25 @@ impl QuoteConfig {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailConfig {
-    /// Resend API key.
+    /// Sender address, including an optional display name.
+    pub sender: Option<String>,
+    /// Resend API key, never written to configuration files.
+    #[serde(skip_serializing)]
     pub resend_api_key: Option<String>,
     /// Porto base URL.
     pub porto_base_url: Option<String>,
+}
+
+impl EmailConfig {
+    /// Rejects enabled email delivery without an explicit sender.
+    pub fn validate(&self) -> eyre::Result<()> {
+        if self.resend_api_key.is_some()
+            && self.sender.as_deref().is_none_or(|sender| sender.trim().is_empty())
+        {
+            eyre::bail!("EMAIL_SENDER is required when RESEND_API_KEY is set");
+        }
+        Ok(())
+    }
 }
 
 /// Phone configuration.
@@ -945,6 +966,38 @@ mod tests {
     use crate::types::{AssetDescriptor, AssetUid};
     use alloy::primitives::uint;
     use std::collections::HashMap;
+
+    #[test]
+    fn email_requires_sender() {
+        let config = RelayConfig::default().with_resend_api_key(Some("test-key".into()));
+        assert!(config.email.validate().unwrap_err().to_string().contains("EMAIL_SENDER"));
+        for sender in ["", "   "] {
+            assert!(
+                config.clone().with_email_sender(Some(sender.into())).email.validate().is_err()
+            );
+        }
+        assert!(
+            config
+                .with_email_sender(Some("LocalProtocol <no-reply@mail.localprotocol.xyz>".into()))
+                .email
+                .validate()
+                .is_ok()
+        );
+        assert!(RelayConfig::default().email.validate().is_ok());
+    }
+
+    #[test]
+    fn email_config_preserves_sender_and_omits_api_key() {
+        let email: EmailConfig = serde_yaml::from_str("sender: 'LocalProtocol <no-reply@mail.localprotocol.xyz>'\nresendApiKey: test-key\nportoBaseUrl: anvil.localhost:5174").unwrap();
+        let serialized = serde_yaml::to_string(&email).unwrap();
+        assert!(serialized.contains("LocalProtocol"));
+        assert!(!serialized.contains("test-key"));
+        let config = RelayConfig { email, ..Default::default() }.with_email_sender(None);
+        assert_eq!(
+            config.email.sender.as_deref(),
+            Some("LocalProtocol <no-reply@mail.localprotocol.xyz>")
+        );
+    }
 
     #[test]
     fn test_config_v21_yaml() {

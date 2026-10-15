@@ -288,9 +288,12 @@ pub struct GetOnrampContactInfoParameters {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetOnrampContactInfoResponse {
-    /// Verified email address.
+    /// Preferred email address; check `emailVerifiedAt` before treating it as verified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    /// Unix timestamp (seconds) when this email was verified; absent if unverified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email_verified_at: Option<u64>,
     /// Verified phone number.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phone: Option<String>,

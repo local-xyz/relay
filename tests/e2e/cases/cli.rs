@@ -43,6 +43,8 @@ async fn respawn_cli() -> eyre::Result<()> {
                 public_node_endpoints: Default::default(),
                 config_only: Default::default(),
                 resend_api_key: Default::default(),
+                email_sender: Default::default(),
+                onramp_worker_secret: Default::default(),
                 porto_base_url: Default::default(),
                 funder_owner_key: Default::default(),
                 binance_api_key: Default::default(),

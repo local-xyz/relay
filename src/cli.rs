@@ -121,6 +121,12 @@ pub struct Args {
     /// The API key for Resend.
     #[arg(long = "resend-api-key", value_name = "KEY", env = "RESEND_API_KEY")]
     pub resend_api_key: Option<String>,
+    /// The sender of verification emails.
+    #[arg(long = "email-sender", value_name = "SENDER", env = "EMAIL_SENDER")]
+    pub email_sender: Option<String>,
+    /// The secret used to authenticate the onramp worker.
+    #[arg(long = "onramp-worker-secret", value_name = "SECRET", env = "ONRAMP_WORKER_SECRET")]
+    pub onramp_worker_secret: Option<String>,
     /// The base URL for Porto services.
     #[arg(long = "porto-base-url", value_name = "URL", env = "PORTO_BASE_URL")]
     pub porto_base_url: Option<String>,
@@ -172,6 +178,8 @@ impl Args {
             .with_database_url(self.database_url)
             .with_max_pending_transactions(self.max_pending_transactions)
             .with_resend_api_key(self.resend_api_key)
+            .with_email_sender(self.email_sender)
+            .with_onramp_worker_secret(self.onramp_worker_secret)
             .with_porto_base_url(self.porto_base_url)
             .with_binance_keys(self.binance_api_key, self.binance_api_secret)
             .with_funder_owner_key(self.funder_owner_key)
@@ -194,6 +202,52 @@ fn parse_chain_url(arg: &str) -> eyre::Result<(Chain, Url)> {
 #[cfg(test)]
 mod tests {
     use clap::CommandFactory;
+
+    #[test]
+    fn test_email_environment_normal_cli() {
+        use clap::Parser;
+        if std::env::var_os("GRID_TEST_EMAIL_ENV").is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "cli::tests::test_email_environment_normal_cli"])
+                .env("GRID_TEST_EMAIL_ENV", "1")
+                .env("RESEND_API_KEY", "test-key")
+                .env("EMAIL_SENDER", "LocalProtocol <no-reply@mail.localprotocol.xyz>")
+                .env("ONRAMP_WORKER_SECRET", "test-worker-secret")
+                .env("PORTO_BASE_URL", "anvil.localhost:5174")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let address = "0x0000000000000000000000000000000000000001";
+        let args = super::Args::try_parse_from([
+            "relay",
+            "--orchestrator",
+            address,
+            "--delegation-proxy",
+            address,
+            "--simulator",
+            address,
+            "--funder",
+            address,
+            "--escrow",
+            address,
+            "--funder-signing-key",
+            "test-funder-key",
+            "--signers-mnemonic",
+            "test test test test test test test test test test test junk",
+        ])
+        .unwrap();
+        assert!(!args.config_only);
+        let config = args.merge_relay_config(crate::config::RelayConfig::default());
+        assert_eq!(
+            config.email.sender.as_deref(),
+            Some("LocalProtocol <no-reply@mail.localprotocol.xyz>")
+        );
+        assert_eq!(config.email.resend_api_key.as_deref(), Some("test-key"));
+        assert_eq!(config.email.porto_base_url.as_deref(), Some("anvil.localhost:5174"));
+        assert_eq!(config.secrets.onramp_worker_secret.as_deref(), Some("test-worker-secret"));
+    }
 
     #[test]
     fn test_debug_asserts() {

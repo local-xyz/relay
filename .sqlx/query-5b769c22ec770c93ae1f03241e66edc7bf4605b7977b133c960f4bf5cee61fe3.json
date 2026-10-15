@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            select email, floor(extract(epoch from verified_at))::bigint as verified_at from emails\n            where address = $1\n            order by verified_at is not null desc, created_at desc\n            limit 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "verified_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "5b769c22ec770c93ae1f03241e66edc7bf4605b7977b133c960f4bf5cee61fe3"
+}

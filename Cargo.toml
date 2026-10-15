@@ -1,10 +1,10 @@
 [package]
 name = "relay"
-version = "26.1.4"
+version = "0.1.1"
 edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/ithacaxyz/relay"
+repository = "https://github.com/local-xyz/relay"
 
 [[bin]]
 path = "src/bin/relay.rs"
@@ -97,6 +97,7 @@ sqlx = { version = "0.8.5", features = [
     "chrono",
     "postgres",
     "runtime-tokio",
+    "tls-rustls-ring-native-roots",
     "macros",
     "bigdecimal",
 ] }

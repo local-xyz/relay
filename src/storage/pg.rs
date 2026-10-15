@@ -846,7 +846,7 @@ impl StorageApi for PgStorage {
         let email_row = sqlx::query!(
             r#"
             select
-                extract(epoch from coalesce(verified_at, created_at))::bigint as timestamp
+                floor(extract(epoch from verified_at))::bigint as timestamp
             from emails
             where address = $1
             order by verified_at is not null desc, created_at desc
@@ -876,7 +876,7 @@ impl StorageApi for PgStorage {
         // Get verified email if exists, otherwise get the last non-verified email
         let email_row = sqlx::query!(
             r#"
-            select email from emails
+            select email, floor(extract(epoch from verified_at))::bigint as verified_at from emails
             where address = $1
             order by verified_at is not null desc, created_at desc
             limit 1
@@ -896,6 +896,7 @@ impl StorageApi for PgStorage {
         .map_err(eyre::Error::from)?;
 
         Ok(OnrampContactInfo {
+            email_verified_at: email_row.as_ref().and_then(|r| r.verified_at.map(|v| v as u64)),
             email: email_row.map(|r| r.email),
             phone: phone_row.as_ref().map(|r| r.phone.clone()),
             phone_verified_at: phone_row.and_then(|r| r.verified_at.map(|v| v as u64)),

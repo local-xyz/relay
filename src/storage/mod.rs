@@ -456,6 +456,42 @@ mod tests {
     use super::*;
     use crate::types::AssetUid;
 
+    #[tokio::test]
+    async fn postgres_requires_tls_and_rejects_plaintext_fallback() {
+        use sqlx::{
+            Connection, PgConnection,
+            postgres::{PgConnectOptions, PgSslMode},
+        };
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+            time::{Duration, timeout},
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 8];
+            socket.read_exact(&mut request).await.unwrap();
+            // PostgreSQL SSLRequest: length 8, protocol code 80877103.
+            assert_eq!(request, [0, 0, 0, 8, 4, 210, 22, 47]);
+            socket.write_all(b"N").await.unwrap();
+        });
+        let options = PgConnectOptions::new()
+            .host("127.0.0.1")
+            .port(port)
+            .username("tls_test")
+            .ssl_mode(PgSslMode::Require);
+        let error = timeout(Duration::from_secs(5), PgConnection::connect_with(&options))
+            .await
+            .unwrap()
+            .err()
+            .expect("a non-TLS server must be rejected");
+        assert!(error.to_string().contains("server does not support TLS"), "{error}");
+        timeout(Duration::from_secs(5), server).await.unwrap().unwrap();
+    }
+
     async fn get_test_storage() -> RelayStorage {
         if let Ok(db_url) = std::env::var("DATABASE_URL") {
             let pool = PgPool::connect(&db_url).await.expect("Failed to connect to PostgreSQL");
@@ -557,3 +593,6 @@ mod tests {
         assert!(storage.get_phone_verified_at("+9999999999", account1).await.unwrap().is_none());
     }
 }
+
+#[cfg(test)]
+mod onramp_tests;

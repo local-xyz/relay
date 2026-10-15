@@ -61,6 +61,7 @@ pub async fn try_spawn_with_args(args: Args, config_path: &Path) -> eyre::Result
     let skip_diagnostics = args.skip_diagnostics;
     let config = if !config_path.exists() {
         let config = args.merge_relay_config(RelayConfig::default());
+        config.email.validate()?;
         config.save_to_file(config_path)?;
         config
     } else if !args.config_only {
@@ -85,8 +86,10 @@ pub async fn try_spawn_with_args(args: Args, config_path: &Path) -> eyre::Result
         }
 
         config
-            .with_resend_api_key(std::env::var("RESEND_API_KEY").ok())
-            .with_onramp_worker_secret(std::env::var("ONRAMP_WORKER_SECRET").ok())
+            .with_resend_api_key(args.resend_api_key)
+            .with_email_sender(args.email_sender)
+            .with_porto_base_url(args.porto_base_url)
+            .with_onramp_worker_secret(args.onramp_worker_secret)
             .with_simple_settler_owner_key(std::env::var("RELAY_SETTLER_OWNER_KEY").ok())
             .with_funder_owner_key(std::env::var("RELAY_FUNDER_OWNER_KEY").ok())
             .with_binance_keys(
@@ -100,6 +103,8 @@ pub async fn try_spawn_with_args(args: Args, config_path: &Path) -> eyre::Result
 
 /// Spawns the relay service using the provided [`RelayConfig`].
 pub async fn try_spawn(config: RelayConfig, skip_diagnostics: bool) -> eyre::Result<RelayHandle> {
+    config.email.validate()?;
+
     // construct db
     let storage = if let Some(db_url) = &config.database_url {
         info!("Using PostgreSQL as storage.");
@@ -209,6 +214,7 @@ pub async fn try_spawn(config: RelayConfig, skip_diagnostics: bool) -> eyre::Res
             AccountRpc::with_phone(
                 relay.clone(),
                 Resend::new(resend_api_key),
+                config.email.sender.clone().expect("email sender validated at startup"),
                 storage.clone(),
                 config.email.porto_base_url.clone().unwrap_or(DEFAULT_PORTO_BASE_URL.to_string()),
                 twilio_client,
@@ -219,6 +225,7 @@ pub async fn try_spawn(config: RelayConfig, skip_diagnostics: bool) -> eyre::Res
             AccountRpc::new(
                 relay.clone(),
                 Resend::new(resend_api_key),
+                config.email.sender.clone().expect("email sender validated at startup"),
                 storage.clone(),
                 config.email.porto_base_url.clone().unwrap_or(DEFAULT_PORTO_BASE_URL.to_string()),
                 onramp_worker_secret.clone(),
@@ -290,4 +297,62 @@ pub async fn try_spawn(config: RelayConfig, skip_diagnostics: bool) -> eyre::Res
         metrics,
         price_oracle,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[tokio::test]
+    async fn email_missing_sender_fails_before_startup() {
+        if std::env::var_os("GRID_TEST_MISSING_SENDER").is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "spawn::tests::email_missing_sender_fails_before_startup"])
+                .env("GRID_TEST_MISSING_SENDER", "1")
+                .env("RESEND_API_KEY", "test-key")
+                .env_remove("EMAIL_SENDER")
+                .env(
+                    "RELAY_MNEMONIC",
+                    "test test test test test test test test test test test junk",
+                )
+                .env("RELAY_FUNDER_SIGNER_KEY", "test-funder-key")
+                .env("RELAY_DB_URL", "invalid-database-url")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("relay.yaml");
+        for (exists, config_only) in [(false, false), (true, false), (true, true)] {
+            if exists {
+                RelayConfig::default().save_to_file(&path).unwrap();
+            }
+            let address = "0x0000000000000000000000000000000000000001";
+            let mut argv = vec![
+                "relay",
+                "--orchestrator",
+                address,
+                "--delegation-proxy",
+                address,
+                "--simulator",
+                address,
+                "--funder",
+                address,
+                "--escrow",
+                address,
+            ];
+            if config_only {
+                argv.push("--config-only");
+            }
+            let args = Args::try_parse_from(argv).unwrap();
+            let result = try_spawn_with_args(args, &path).await;
+            let Err(error) = result else { panic!("email startup should fail") };
+            assert!(error.to_string().contains("EMAIL_SENDER"), "{error}");
+            if !exists {
+                assert!(!path.exists(), "invalid config must not be written");
+            }
+        }
+    }
 }

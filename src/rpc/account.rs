@@ -112,6 +112,7 @@ pub trait AccountApi {
 pub struct AccountRpc {
     relay: Relay,
     client: Resend,
+    sender: String,
     storage: RelayStorage,
     porto_base_url: String,
     twilio_client: Option<TwilioClient>,
@@ -124,6 +125,7 @@ impl AccountRpc {
     pub fn new(
         relay: Relay,
         client: Resend,
+        sender: String,
         storage: RelayStorage,
         porto_base_url: String,
         onramp_worker_secret: String,
@@ -131,6 +133,7 @@ impl AccountRpc {
         Self {
             relay,
             client,
+            sender,
             storage,
             porto_base_url,
             twilio_client: None,
@@ -140,9 +143,11 @@ impl AccountRpc {
     }
 
     /// Create a new account RPC module with phone verification support.
+    #[expect(clippy::too_many_arguments, reason = "Explicit account RPC dependencies and settings")]
     pub fn with_phone(
         relay: Relay,
         client: Resend,
+        sender: String,
         storage: RelayStorage,
         porto_base_url: String,
         twilio_client: TwilioClient,
@@ -152,6 +157,7 @@ impl AccountRpc {
         Self {
             relay,
             client,
+            sender,
             storage,
             porto_base_url,
             twilio_client: Some(twilio_client),
@@ -180,21 +186,8 @@ impl AccountApiServer for AccountRpc {
 
         let token = generate_token(8);
 
-        let mut url = Url::parse(&format!("https://{}/email/verify", self.porto_base_url)).unwrap();
-        url.query_pairs_mut().append_pair("address", wallet_address.to_string().as_str());
-        url.query_pairs_mut().append_pair("email", email.as_str());
-        url.query_pairs_mut().append_pair("token", token.as_str());
-
-        let mail = CreateEmailBaseOptions::new(
-            "Porto <no-reply@porto.sh>",
-            &[email.to_string()],
-            "Verify email address for Porto",
-        )
-        .with_text(&format!(
-            "Click the following link to verify your email address:\n\n\
-            {url}\n\n\
-            If you did not create a Porto account, you can safely ignore this."
-        ));
+        let mail =
+            verification_email(&self.sender, &self.porto_base_url, &email, wallet_address, &token);
 
         self.client.emails.send(mail).await.map_err(|err| EmailError::InternalError(err.into()))?;
 
@@ -340,6 +333,7 @@ impl AccountApiServer for AccountRpc {
 
         Ok(GetOnrampContactInfoResponse {
             email: contact_info.email,
+            email_verified_at: contact_info.email_verified_at,
             phone: contact_info.phone,
             phone_verified_at: contact_info.phone_verified_at,
         })
@@ -349,4 +343,48 @@ impl AccountApiServer for AccountRpc {
 /// Generate a random alphanumeric token.
 fn generate_token(length: usize) -> String {
     rand::rng().sample_iter(&Alphanumeric).take(length).map(char::from).collect()
+}
+
+fn verification_email(
+    sender: &str,
+    porto_base_url: &str,
+    email: &str,
+    wallet_address: alloy::primitives::Address,
+    token: &str,
+) -> CreateEmailBaseOptions {
+    let mut url = Url::parse(&format!("https://{}/email/verify", porto_base_url)).unwrap();
+    url.query_pairs_mut().append_pair("address", wallet_address.to_string().as_str());
+    url.query_pairs_mut().append_pair("email", email);
+    url.query_pairs_mut().append_pair("token", token);
+
+    CreateEmailBaseOptions::new(sender, &[email.to_string()], "Verify email address for Porto")
+        .with_text(&format!(
+            "Click the following link to verify your email address:\n\n\
+            {url}\n\n\
+            If you did not create a Porto account, you can safely ignore this."
+        ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn configured_email_sender_and_verification_link() {
+        let mail = super::verification_email(
+            "LocalProtocol <no-reply@mail.localprotocol.xyz>",
+            "anvil.localhost:5174",
+            "person@example.com",
+            alloy::primitives::Address::ZERO,
+            "test-token",
+        );
+        let value = serde_json::to_value(mail).unwrap();
+        assert_eq!(value["from"], "LocalProtocol <no-reply@mail.localprotocol.xyz>");
+        assert_eq!(value["to"][0], "person@example.com");
+        assert_eq!(value["subject"], "Verify email address for Porto");
+        let text = value["text"].as_str().unwrap();
+        assert!(text.contains("https://anvil.localhost:5174/email/verify?"));
+        assert!(text.contains("token=test-token"));
+        assert!(
+            text.contains("If you did not create a Porto account, you can safely ignore this.")
+        );
+    }
 }
