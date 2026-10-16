@@ -1,6 +1,6 @@
 use crate::{
     config::QuoteConfig,
-    types::{AssetDescriptor, AssetUid, VersionedContracts},
+    types::{AssetDescriptor, AssetUid, VersionedContracts, rpc::PermissionType},
 };
 use alloy::primitives::{Address, ChainId, U256, map::HashMap};
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,26 @@ pub struct ChainCapabilities {
     pub contracts: VersionedContracts,
     /// The fee configuration of the chain.
     pub fees: ChainFees,
+    /// The key permission system supported on the chain.
+    pub permissions: ChainPermissions,
+}
+
+/// Key permission capabilities of a chain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainPermissions {
+    /// The permission types accepted in `authorizeKeys` and reported by `wallet_getKeys`.
+    ///
+    /// Clients should feature-detect against this list instead of assuming a permission type is
+    /// supported; an unknown type is rejected by `wallet_prepareCalls`.
+    pub types: Vec<PermissionType>,
+}
+
+impl ChainPermissions {
+    /// Permissions supported by the current account implementation.
+    pub fn current() -> Self {
+        Self { types: PermissionType::all() }
+    }
 }
 
 /// Chain fee settings.

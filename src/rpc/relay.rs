@@ -23,7 +23,7 @@ use crate::{
             AddFaucetFundsParameters, AddFaucetFundsResponse, AddressOrNative, Asset7811,
             AssetFilterItem, CallHistoryCapabilities, CallHistoryEntry, CallHistoryTransaction,
             CallKey, CallReceipt, CallStatusCode, ChainCapabilities, ChainFeeToken, ChainFees,
-            GetAssetsParameters, GetAssetsResponse, GetAuthorizationParameters,
+            ChainPermissions, GetAssetsParameters, GetAssetsResponse, GetAuthorizationParameters,
             GetAuthorizationResponse, GetCallsHistoryParameters, GetCallsHistoryResponse, Meta,
             PreCallContext, PrepareCallsCapabilities, PrepareCallsContext,
             PrepareUpgradeAccountResponse, RelayCapabilities, RequiredAsset,
@@ -271,6 +271,7 @@ impl Relay {
                                 quote_config: self.inner.quote_config.clone(),
                                 tokens: fee_tokens,
                             },
+                            permissions: ChainPermissions::current(),
                         },
                     ))
                 })

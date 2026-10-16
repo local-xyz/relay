@@ -801,9 +801,7 @@ mod tests {
         CallPermission, DiffDirection,
         GridAccount::SpendPeriod,
         Intent, IntentV05, Quote, Quotes, U40,
-        rpc::{
-            Permission, PermissionDiscriminants, SignatureVerificationPermission, SpendPermission,
-        },
+        rpc::{Permission, PermissionType, SignatureVerificationPermission, SpendPermission},
     };
 
     use super::*;
@@ -963,22 +961,18 @@ mod tests {
                                 isSuperAdmin: true,
                                 publicKey: Address::ZERO.as_slice().into(),
                             },
-                            permissions: PermissionDiscriminants::iter()
+                            permissions: PermissionType::iter()
                                 .map(|permission| match permission {
-                                    PermissionDiscriminants::Call => {
-                                        Permission::Call(CallPermission {
-                                            selector: FixedBytes::<4>::ZERO,
-                                            to: Address::ZERO,
-                                        })
-                                    }
-                                    PermissionDiscriminants::Spend => {
-                                        Permission::Spend(SpendPermission {
-                                            limit: U256::ZERO,
-                                            period: SpendPeriod::Minute,
-                                            token: Address::ZERO,
-                                        })
-                                    }
-                                    PermissionDiscriminants::SignatureVerification => {
+                                    PermissionType::Call => Permission::Call(CallPermission {
+                                        selector: FixedBytes::<4>::ZERO,
+                                        to: Address::ZERO,
+                                    }),
+                                    PermissionType::Spend => Permission::Spend(SpendPermission {
+                                        limit: U256::ZERO,
+                                        period: SpendPeriod::Minute,
+                                        token: Address::ZERO,
+                                    }),
+                                    PermissionType::SignatureVerification => {
                                         Permission::SignatureVerification(
                                             SignatureVerificationPermission {
                                                 addresses: vec![Address::ZERO],

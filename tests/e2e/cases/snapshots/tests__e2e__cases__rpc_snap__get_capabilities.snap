@@ -160,6 +160,13 @@ expression: response
           "nativeRate": "0xde0b6b3a7640000"
         }
       ]
+    },
+    "permissions": {
+      "types": [
+        "call",
+        "spend",
+        "signatureVerification"
+      ]
     }
   }
 }
