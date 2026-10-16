@@ -65,6 +65,11 @@ impl AuthorizeKey {
                     calls.push(Call::set_spend_limit(key_hash, perm.token, perm.period, perm.limit))
                 }
                 Permission::Sign(perm) => {
+                    // `isValidSignature` is never called by the zero address, so such a grant
+                    // could only ever be a mistake.
+                    if perm.verifier.is_zero() {
+                        return Err(KeysError::ZeroVerifier);
+                    }
                     calls.push(Call::set_signature_checker_approval(key_hash, perm.verifier, true))
                 }
             }
@@ -136,11 +141,17 @@ impl KeySignature {
 mod tests {
     use alloy::primitives::{Address, B256, Bytes, U256, fixed_bytes};
 
-    use crate::types::{
-        Call, CallPermission,
-        GridAccount::SpendPeriod,
-        Key, KeyType, U40,
-        rpc::{AuthorizeKey, AuthorizeKeyResponse, Permission, RevokeKey, SpendPermission},
+    use crate::{
+        error::KeysError,
+        types::{
+            Call, CallPermission,
+            GridAccount::SpendPeriod,
+            Key, KeyType, U40,
+            rpc::{
+                AuthorizeKey, AuthorizeKeyResponse, Permission, RevokeKey, SignPermission,
+                SpendPermission,
+            },
+        },
     };
 
     #[test]
@@ -189,6 +200,27 @@ mod tests {
                 U256::from(1000)
             )
         );
+    }
+
+    #[test]
+    fn test_sign_permission_into_calls() {
+        let key = |verifier: Address| AuthorizeKey {
+            key: Key::secp256k1(Address::repeat_byte(0x11), U40::from(0), false),
+            permissions: vec![Permission::Sign(SignPermission { verifier })],
+        };
+
+        let verifier = Address::repeat_byte(0xc0);
+        let (_, calls) = key(verifier).into_calls().unwrap();
+        assert_eq!(
+            calls,
+            vec![Call::set_signature_checker_approval(
+                key(verifier).key.key_hash(),
+                verifier,
+                true
+            )]
+        );
+
+        assert!(matches!(key(Address::ZERO).into_calls(), Err(KeysError::ZeroVerifier)));
     }
 
     #[test]

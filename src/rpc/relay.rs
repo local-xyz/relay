@@ -892,7 +892,26 @@ impl Relay {
         chain_id: ChainId,
     ) -> Result<Vec<AuthorizeKeyResponse>, RelayError> {
         match self.get_keys_onchain_single(address, chain_id).await {
-            Ok(keys) => Ok(keys),
+            Ok(mut keys) => {
+                // Keys authorized by stored pre-calls that have not landed on-chain yet are
+                // reported as well, so that a caller sees a key it just authorized (e.g. a
+                // `wallet_grantPermissions` for a delegated account) before its first bundle.
+                for pre_call in self.inner.storage.read_precalls_for_eoa(chain_id, address).await? {
+                    for key in pre_call.authorized_keys_with_permissions()? {
+                        match keys.iter_mut().find(|existing| existing.hash == key.hash) {
+                            Some(existing) => {
+                                for permission in key.authorize_key.permissions {
+                                    if !existing.authorize_key.permissions.contains(&permission) {
+                                        existing.authorize_key.permissions.push(permission);
+                                    }
+                                }
+                            }
+                            None => keys.push(key),
+                        }
+                    }
+                }
+                Ok(keys)
+            }
             Err(err) => {
                 // We check our storage, since it might have been called after createAccount, but
                 // before its onchain commit.
