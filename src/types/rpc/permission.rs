@@ -7,9 +7,17 @@ use crate::types::{
 };
 
 /// Represents key permissions.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-#[cfg_attr(test, derive(strum::EnumDiscriminants))]
-#[cfg_attr(test, strum_discriminants(derive(strum::EnumIter), doc = "Key permissions"))]
+///
+/// The set of variants is advertised to clients as [`PermissionType`]s in
+/// `wallet_getCapabilities`, so adding a variant here automatically advertises it.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, strum::EnumDiscriminants)]
+#[strum_discriminants(
+    name(PermissionType),
+    derive(Serialize, Deserialize, Hash, PartialOrd, Ord, strum::EnumIter),
+    serde(rename_all = "camelCase"),
+    doc = "The kind of a key [`Permission`], as accepted in `authorizeKeys` and advertised in \
+           `wallet_getCapabilities`."
+)]
 #[serde(tag = "type")]
 pub enum Permission {
     /// Call permission.
@@ -21,6 +29,13 @@ pub enum Permission {
     /// Signature verification permission.
     #[serde(rename = "signatureVerification")]
     SignatureVerification(SignatureVerificationPermission),
+}
+
+impl PermissionType {
+    /// Every permission type this relay accepts, in declaration order.
+    pub fn all() -> Vec<Self> {
+        <Self as strum::IntoEnumIterator>::iter().collect()
+    }
 }
 
 impl From<CallPermission> for Permission {
@@ -72,9 +87,40 @@ impl From<SpendInfo> for SpendPermission {
 
 #[cfg(test)]
 mod tests {
-    use super::{Permission, SignatureVerificationPermission};
+    use super::{Permission, PermissionType, SignatureVerificationPermission};
     use crate::types::CallPermission;
     use alloy::primitives::{Address, address, fixed_bytes};
+
+    /// The advertised type names must be exactly the `type` tags clients send in
+    /// `authorizeKeys`, otherwise feature detection lies.
+    #[test]
+    fn permission_type_names_match_permission_tags() {
+        assert_eq!(
+            serde_json::to_value(PermissionType::all()).unwrap(),
+            serde_json::json!(["call", "spend", "signatureVerification"]),
+        );
+        for ty in PermissionType::all() {
+            let tag = serde_json::to_value(ty).unwrap();
+            let permission = match ty {
+                PermissionType::Call => Permission::Call(CallPermission {
+                    to: Address::ZERO,
+                    selector: fixed_bytes!("0xa9059cbb"),
+                }),
+                PermissionType::Spend => Permission::Spend(super::SpendPermission {
+                    limit: Default::default(),
+                    period: crate::types::GridAccount::SpendPeriod::Day,
+                    token: Address::ZERO,
+                }),
+                PermissionType::SignatureVerification => {
+                    Permission::SignatureVerification(SignatureVerificationPermission {
+                        addresses: vec![],
+                    })
+                }
+            };
+            assert_eq!(serde_json::to_value(&permission).unwrap()["type"], tag);
+            assert_eq!(PermissionType::from(&permission), ty);
+        }
+    }
 
     #[test]
     fn signature_verification_permission_roundtrip() {
