@@ -3,11 +3,11 @@ use crate::{
     error::{IntentError, MerkleError, RelayError},
     types::{
         CallPermission,
-        GridAccount::{setCanExecuteCall, setSpendLimitCall},
+        GridAccount::{setCanExecuteCall, setSignatureCheckerApprovalCall, setSpendLimitCall},
         KeyType, Signature, SignedCall, VersionedContract,
         rpc::{
             AddressOrNative, AuthorizeKey, AuthorizeKeyResponse, BalanceOverrides, CallKey,
-            Permission, SpendPermission,
+            Permission, SignPermission, SpendPermission,
         },
     },
 };
@@ -147,12 +147,25 @@ impl SignedCall {
             // if it wasn't a setSpendLimit, try decoding as a setCanExecute.
             if let Ok(setCanExecuteCall { keyHash, target: to, fnSel: selector, can }) =
                 setCanExecuteCall::abi_decode(&call.data)
-                && can
+            {
+                if can {
+                    permissions
+                        .entry(keyHash)
+                        .or_default()
+                        .push(CallPermission { selector, to }.into());
+                }
+                continue;
+            }
+
+            // otherwise, try decoding as a setSignatureCheckerApproval.
+            if let Ok(setSignatureCheckerApprovalCall { keyHash, checker, isApproved }) =
+                setSignatureCheckerApprovalCall::abi_decode(&call.data)
+                && isApproved
             {
                 permissions
                     .entry(keyHash)
                     .or_default()
-                    .push(CallPermission { selector, to }.into());
+                    .push(SignPermission { verifier: checker }.into());
             }
         }
 
@@ -510,5 +523,40 @@ impl IntentKey<CallKey> {
             .abi_encode_packed()
             .into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::aliases::U40;
+
+    /// A stored precall reports a key's approved verifiers as `sign` permissions, the way
+    /// `wallet_getKeys` reports them from chain once the precall has been executed.
+    #[test]
+    fn precall_sign_permissions() {
+        let key = Key::p256(B256::random().abi_encode().into(), U40::ZERO, false);
+        let key_hash = key.key_hash();
+        let (approved, revoked) = (Address::random(), Address::random());
+
+        let calls = vec![
+            Call::authorize(key.clone()),
+            Call::set_signature_checker_approval(key_hash, approved, true),
+            Call::set_signature_checker_approval(key_hash, revoked, false),
+        ];
+        let pre_call = SignedCall {
+            eoa: Address::random(),
+            executionData: calls.abi_encode().into(),
+            nonce: U256::ZERO,
+            signature: Bytes::new(),
+        };
+
+        let keys = pre_call.authorized_keys_with_permissions().unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].hash, key_hash);
+        assert_eq!(
+            keys[0].authorize_key.permissions,
+            vec![Permission::Sign(SignPermission { verifier: approved })]
+        );
     }
 }

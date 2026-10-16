@@ -71,10 +71,8 @@ expression: response_value
             "type": "spend"
           },
           {
-            "addresses": [
-              "0x0000000000000000000000000000000000000000"
-            ],
-            "type": "signatureVerification"
+            "type": "sign",
+            "verifier": "0x0000000000000000000000000000000000000000"
           }
         ],
         "publicKey": "0x0000000000000000000000000000000000000000",
@@ -113,7 +111,7 @@ expression: response_value
     "publicKey": "0x0000000000000000000000000000000000000000",
     "type": "secp256k1"
   },
-  "signature": "0xcee2e5d81b4920b91cbd0dc908ec1766b947ddd439549ee219fd2ea615887bc60d060ee1b7bbe2a0b517cbbb3b65444a71d9caa9df9624608d737ad8f96b7c0d1b",
+  "signature": "0xc3a9738ce932981601e5df61f6e3b7444f2d413a38e9fff1aab9a0e4e73851a662488bb653e15ec784c1ff48b7821dd71fcf3b6aa81062fd45b4e48f70d742551c",
   "typedData": {
     "domain": {},
     "message": null,

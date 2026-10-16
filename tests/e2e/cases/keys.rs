@@ -15,8 +15,7 @@ use relay::{
         KeyType, KeyWith712Signer,
         rpc::{
             AuthorizeKey, AuthorizeKeyResponse, Meta, Permission, PrepareCallsCapabilities,
-            PrepareCallsParameters, SendPreparedCallsParameters, SignatureVerificationPermission,
-            SpendPermission,
+            PrepareCallsParameters, SendPreparedCallsParameters, SignPermission, SpendPermission,
         },
     },
 };
@@ -81,10 +80,10 @@ async fn get_keys() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Authorizes a session key with a `signatureVerification` permission as part of the account
+/// Authorizes a session key with a `sign` permission as part of the account
 /// upgrade, and ensures the checker is approved on-chain and reported by `wallet_getKeys`.
 #[tokio::test(flavor = "multi_thread")]
-async fn signature_verification_permission() -> eyre::Result<()> {
+async fn sign_permission() -> eyre::Result<()> {
     let env = Environment::setup().await?;
     let checker = Address::random();
 
@@ -95,9 +94,7 @@ async fn signature_verification_permission() -> eyre::Result<()> {
                 to: env.erc20,
                 selector: MockErc20::transferCall::SELECTOR.into(),
             }),
-            Permission::SignatureVerification(SignatureVerificationPermission {
-                addresses: vec![checker],
-            }),
+            Permission::Sign(SignPermission { verifier: checker }),
         ]);
 
     // Both keys are authorized in the upgrade itself, i.e. `wallet_prepareUpgradeAccount`.
@@ -131,11 +128,11 @@ async fn signature_verification_permission() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Authorizes a session key with a `signatureVerification` permission through a precall, and
+/// Authorizes a session key with a `sign` permission through a precall, and
 /// ensures the precall is accepted, keyed to the session key's nonce sequence, and applied once
 /// the session key sends its first intent.
 #[tokio::test(flavor = "multi_thread")]
-async fn signature_verification_precall() -> eyre::Result<()> {
+async fn sign_permission_precall() -> eyre::Result<()> {
     let env = Environment::setup().await?;
     let checker = Address::random();
 
@@ -151,9 +148,7 @@ async fn signature_verification_precall() -> eyre::Result<()> {
                 to: env.erc20,
                 selector: MockErc20::transferCall::SELECTOR.into(),
             }),
-            Permission::SignatureVerification(SignatureVerificationPermission {
-                addresses: vec![checker],
-            }),
+            Permission::Sign(SignPermission { verifier: checker }),
         ]);
     let seq_key = U256::from_be_bytes(session_key.key_hash().into()) >> 64 << 64;
 

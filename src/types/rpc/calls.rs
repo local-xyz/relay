@@ -801,7 +801,7 @@ mod tests {
         CallPermission, DiffDirection,
         GridAccount::SpendPeriod,
         Intent, IntentV05, Quote, Quotes, U40,
-        rpc::{Permission, PermissionType, SignatureVerificationPermission, SpendPermission},
+        rpc::{Permission, PermissionType, SignPermission, SpendPermission},
     };
 
     use super::*;
@@ -972,12 +972,8 @@ mod tests {
                                         period: SpendPeriod::Minute,
                                         token: Address::ZERO,
                                     }),
-                                    PermissionType::SignatureVerification => {
-                                        Permission::SignatureVerification(
-                                            SignatureVerificationPermission {
-                                                addresses: vec![Address::ZERO],
-                                            },
-                                        )
+                                    PermissionType::Sign => {
+                                        Permission::Sign(SignPermission { verifier: Address::ZERO })
                                     }
                                 })
                                 .collect(),

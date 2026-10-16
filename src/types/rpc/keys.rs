@@ -64,10 +64,8 @@ impl AuthorizeKey {
                 Permission::Spend(perm) => {
                     calls.push(Call::set_spend_limit(key_hash, perm.token, perm.period, perm.limit))
                 }
-                Permission::SignatureVerification(perm) => {
-                    calls.extend(perm.addresses.into_iter().map(|checker| {
-                        Call::set_signature_checker_approval(key_hash, checker, true)
-                    }))
+                Permission::Sign(perm) => {
+                    calls.push(Call::set_signature_checker_approval(key_hash, perm.verifier, true))
                 }
             }
         }
