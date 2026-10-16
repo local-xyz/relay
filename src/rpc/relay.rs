@@ -16,7 +16,7 @@ use crate::{
         Account, Asset, AssetDeficit, AssetDiffResponse, AssetDiffs, AssetMetadataWithPrice,
         AssetPrice, AssetType, Call, ChainAssetDiffs, DelegationStatus, Escrow, FundSource,
         FundingIntentContext, GasEstimate, Health, IERC20, IEscrow, IntentKey, IntentKind, Intents,
-        Key, MULTICHAIN_NONCE_PREFIX, MerkleLeafInfo,
+        Key, KeyHash, MULTICHAIN_NONCE_PREFIX, MerkleLeafInfo,
         OrchestratorContract::{self, IntentExecuted},
         Quotes, SignedCall, SignedCalls, SourcedAsset, Transfer, VersionedContracts,
         rpc::{
@@ -1129,17 +1129,30 @@ impl Relay {
             .try_implementation()
             .unwrap_or(self.contracts().delegation_implementation());
 
+        // Keys revoked by this intent. Stored precalls for these keys are attached as well, so
+        // that a key which only exists as a pending authorization can be revoked: the orchestrator
+        // executes the precall (authorize + permissions) before the intent's `revoke`, which both
+        // makes the revoke succeed and consumes the precall's nonce so it can never be replayed.
+        //
+        // Revokes submitted as precalls are excluded: those are stored in the key's own nonce
+        // sequence and executed in order with the pending authorization.
+        let revoked_key_hashes: HashSet<KeyHash> = if request.capabilities.pre_call {
+            HashSet::default()
+        } else {
+            request.capabilities.revoke_keys.iter().map(|key| key.hash).collect()
+        };
+
         let seq_to_stored_precalls = self
             .inner
             .storage
             .read_precalls_for_eoa(request.chain_id, eoa)
             .await?
             .into_iter()
-            // Only retain precalls that are relevant for this intent's signing key.
+            // Only retain precalls that are relevant for this intent's signing key or for a key
+            // it revokes.
             .filter(|call| {
-                call.calls().is_ok_and(|calls| {
-                    calls.iter().any(|call| call.decode_precall_key_hash() == Some(key_hash))
-                })
+                call.calls()
+                    .is_ok_and(|calls| precall_is_relevant(&calls, key_hash, &revoked_key_hashes))
             })
             .sorted_by_key(|call| call.nonce)
             .fold(HashMap::new(), |mut acc, call| {
@@ -3849,10 +3862,57 @@ pub fn adjust_balance_for_decimals(balance: U256, from_decimals: u8, to_decimals
     if diff > 0 { balance / factor } else { balance * factor }
 }
 
+/// Returns whether a stored precall with the given `calls` should be attached to an intent signed
+/// by `signing_key_hash` that revokes `revoked_key_hashes`.
+///
+/// A precall is relevant if any of its key operations (see [`Call::decode_precall_key_hash`])
+/// targets the signing key or one of the revoked keys.
+fn precall_is_relevant(
+    calls: &[Call],
+    signing_key_hash: KeyHash,
+    revoked_key_hashes: &HashSet<KeyHash>,
+) -> bool {
+    calls
+        .iter()
+        .filter_map(Call::decode_precall_key_hash)
+        .any(|hash| hash == signing_key_hash || revoked_key_hashes.contains(&hash))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::primitives::U256;
+    use alloy::primitives::{U256, aliases::U40};
+
+    #[test]
+    fn precall_relevance_for_signing_and_revoked_keys() {
+        let signing_key_hash = B256::random();
+        let session_key = Key::secp256k1(Address::random(), U40::ZERO, false);
+        let other_key = Key::secp256k1(Address::random(), U40::ZERO, false);
+
+        let session_precall = vec![
+            Call::authorize(session_key.clone()),
+            Call::set_can_execute(session_key.key_hash(), Address::random(), [0u8; 4].into(), true),
+        ];
+        let other_precall = vec![Call::authorize(other_key.clone())];
+        let signing_precall =
+            vec![Call::set_can_execute(signing_key_hash, Address::random(), [0u8; 4].into(), true)];
+        let no_key_ops = vec![Call::transfer(Address::random(), Address::random(), U256::ONE)];
+
+        let no_revokes = HashSet::default();
+        let revoke_session = HashSet::from_iter([session_key.key_hash()]);
+
+        // Without revokes, only the signing key's precalls are relevant.
+        assert!(precall_is_relevant(&signing_precall, signing_key_hash, &no_revokes));
+        assert!(!precall_is_relevant(&session_precall, signing_key_hash, &no_revokes));
+        assert!(!precall_is_relevant(&other_precall, signing_key_hash, &no_revokes));
+        assert!(!precall_is_relevant(&no_key_ops, signing_key_hash, &no_revokes));
+
+        // Revoking the session key also attaches its precalls, but not those of other keys.
+        assert!(precall_is_relevant(&signing_precall, signing_key_hash, &revoke_session));
+        assert!(precall_is_relevant(&session_precall, signing_key_hash, &revoke_session));
+        assert!(!precall_is_relevant(&other_precall, signing_key_hash, &revoke_session));
+        assert!(!precall_is_relevant(&no_key_ops, signing_key_hash, &revoke_session));
+    }
 
     #[test]
     fn test_adjust_balance_for_decimals() {
