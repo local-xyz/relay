@@ -173,6 +173,13 @@ async fn sign_permission_precall() -> eyre::Result<()> {
     let account = GridAccount::new(env.eoa.address(), env.provider());
     assert!(account.approvedSignatureCheckers(session_key.key_hash()).call().await?.is_empty());
 
+    // ... but `wallet_getKeys` already reports the pending key, with its permissions, alongside
+    // the on-chain admin key.
+    let keys = env.get_eoa_authorized_keys().await?;
+    assert_eq!(keys.len(), 2);
+    let pending = keys.iter().find(|k| k.hash == session_key.key_hash()).unwrap();
+    assert_eq!(pending.authorize_key, session_key.to_authorized());
+
     // The first intent signed by the session key executes the precall.
     TxContext {
         calls: vec![Call::transfer(env.erc20, Address::ZERO, U256::from(1))],
@@ -236,6 +243,43 @@ async fn signature_verification_session_key_cannot_self_approve() -> eyre::Resul
 
     let account = GridAccount::new(env.eoa.address(), env.provider());
     assert!(account.approvedSignatureCheckers(session_key.key_hash()).call().await?.is_empty());
+
+    Ok(())
+}
+
+/// A `sign` permission whose verifier is the zero address is rejected as invalid params.
+#[tokio::test(flavor = "multi_thread")]
+async fn sign_permission_zero_verifier_rejected() -> eyre::Result<()> {
+    let env = Environment::setup().await?;
+
+    let admin_key = KeyWith712Signer::random_admin(KeyType::Secp256k1)?.unwrap();
+    let session_key = KeyWith712Signer::random_session(KeyType::P256)?
+        .unwrap()
+        .with_permissions(vec![Permission::Sign(SignPermission { verifier: Address::ZERO })]);
+
+    upgrade_account_eagerly(&env, &[admin_key.to_authorized()], &admin_key, AuthKind::Auth).await?;
+
+    let response = env
+        .relay_endpoint
+        .prepare_calls(PrepareCallsParameters {
+            from: Some(env.eoa.address()),
+            calls: vec![],
+            chain_id: env.chain_id(),
+            capabilities: PrepareCallsCapabilities {
+                authorize_keys: vec![session_key.to_authorized()],
+                revoke_keys: vec![],
+                meta: Meta { fee_payer: None, fee_token: Some(env.fee_token), nonce: None },
+                pre_calls: vec![],
+                pre_call: false,
+                required_funds: vec![],
+            },
+            state_overrides: Default::default(),
+            balance_overrides: Default::default(),
+            key: Some(admin_key.to_call_key()),
+        })
+        .await;
+
+    assert!(response.is_err_and(|err| err.to_string().contains("zero address")));
 
     Ok(())
 }

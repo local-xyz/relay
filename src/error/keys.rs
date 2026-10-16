@@ -20,6 +20,9 @@ pub enum KeysError {
     /// Unknown key hash.
     #[error("key hash {0} is unknown")]
     UnknownKeyHash(KeyHash),
+    /// A `sign` permission names the zero address as its verifier.
+    #[error("sign permission verifier must not be the zero address")]
+    ZeroVerifier,
 }
 
 impl From<KeysError> for jsonrpsee::types::error::ErrorObject<'static> {
@@ -29,6 +32,7 @@ impl From<KeysError> for jsonrpsee::types::error::ErrorObject<'static> {
             | KeysError::PrecallConflictingKeys
             | KeysError::OnlyAdminKeyAllowed
             | KeysError::InvalidSignature
+            | KeysError::ZeroVerifier
             | KeysError::UnknownKeyHash { .. } => invalid_params(err.to_string()),
         }
     }
