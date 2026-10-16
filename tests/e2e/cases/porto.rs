@@ -638,3 +638,62 @@ async fn session_key_pre_call_ordering() -> Result<()> {
     .await?;
     Ok(())
 }
+
+/// Revoking a key that only exists as a stored precall must attach and consume that precall in
+/// the revoke intent, so that the key is authorized and revoked atomically onchain and can not be
+/// made live afterwards by signing an intent with it.
+#[tokio::test(flavor = "multi_thread")]
+async fn revoke_consumes_stored_session_key_pre_call() -> Result<()> {
+    let key = KeyWith712Signer::random_admin(KeyType::WebAuthnP256)?.unwrap();
+    let session_key = KeyWith712Signer::random_session(KeyType::P256)?.unwrap();
+    run_e2e_erc20(|env| {
+        let key_hash = session_key.key_hash();
+        vec![
+            TxContext { authorization_keys: vec![&key], ..Default::default() },
+            // authorize a session key via a stored precall
+            TxContext {
+                authorization_keys: vec![&session_key],
+                pre_call: true,
+                calls: vec![
+                    Call::set_spend_limit(key_hash, env.erc20, SpendPeriod::Day, U256::MAX),
+                    Call::set_can_execute(
+                        key_hash,
+                        env.erc20,
+                        MockErc20::transferCall::SELECTOR.into(),
+                        true,
+                    ),
+                ],
+                key: Some(&key),
+                ..Default::default()
+            },
+            // the admin revokes the session key with a regular intent. The key does not exist
+            // onchain yet, so the stored authorization precall must be attached to the intent
+            // and executed before the revoke, consuming its nonce.
+            TxContext {
+                revoke_keys: vec![&session_key],
+                key: Some(&key),
+                quote: Some(Box::new(move |_, context| {
+                    Box::pin(async move {
+                        let intent = &context.quote().unwrap().ty().quotes[0].intent;
+                        let pre_authorized = intent.pre_authorized_keys().unwrap();
+                        assert!(
+                            pre_authorized.iter().any(|k| k.key_hash() == key_hash),
+                            "stored session key precall should be attached to the revoke intent"
+                        );
+                    })
+                })),
+                ..Default::default()
+            },
+            // the session key was authorized and revoked atomically, so it is unusable.
+            TxContext {
+                calls: vec![Call::transfer(env.erc20, Address::ZERO, U256::from(10000000u64))],
+                expected: ExpectedOutcome::FailEstimate,
+                key: Some(&session_key),
+                fee_token: Some(env.erc20),
+                ..Default::default()
+            },
+        ]
+    })
+    .await?;
+    Ok(())
+}
