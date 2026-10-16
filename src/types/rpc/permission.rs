@@ -26,9 +26,9 @@ pub enum Permission {
     /// Spend permission.
     #[serde(rename = "spend")]
     Spend(SpendPermission),
-    /// Signature verification permission.
-    #[serde(rename = "signatureVerification")]
-    SignatureVerification(SignatureVerificationPermission),
+    /// Sign permission.
+    #[serde(rename = "sign")]
+    Sign(SignPermission),
 }
 
 impl PermissionType {
@@ -50,21 +50,22 @@ impl From<SpendPermission> for Permission {
     }
 }
 
-impl From<SignatureVerificationPermission> for Permission {
-    fn from(perm: SignatureVerificationPermission) -> Self {
-        Permission::SignatureVerification(perm)
+impl From<SignPermission> for Permission {
+    fn from(perm: SignPermission) -> Self {
+        Permission::Sign(perm)
     }
 }
 
-/// Represents a signature verification permission.
+/// Represents a sign permission: the key may sign for `verifier`.
 ///
-/// Approves a set of contracts as ERC-1271 signature checkers for a key, i.e. the account will
-/// return the ERC-1271 magic value for signatures produced by the key only when `isValidSignature`
-/// is called by one of these addresses.
+/// Approves `verifier` as an ERC-1271 signature checker for the key, i.e. the account returns the
+/// ERC-1271 magic value for signatures produced by the key only when `isValidSignature` is called
+/// by `verifier`. One permission per verifier, mirroring `call` (one per target) and `spend` (one
+/// per token). Maps to `setSignatureCheckerApproval(keyHash, verifier, true)`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SignatureVerificationPermission {
-    /// The addresses of the approved signature checkers.
-    pub addresses: Vec<Address>,
+pub struct SignPermission {
+    /// The contract that may accept the key's signatures.
+    pub verifier: Address,
 }
 
 /// Represents spend permissions.
@@ -87,7 +88,7 @@ impl From<SpendInfo> for SpendPermission {
 
 #[cfg(test)]
 mod tests {
-    use super::{Permission, PermissionType, SignatureVerificationPermission};
+    use super::{Permission, PermissionType, SignPermission};
     use crate::types::CallPermission;
     use alloy::primitives::{Address, address, fixed_bytes};
 
@@ -97,7 +98,7 @@ mod tests {
     fn permission_type_names_match_permission_tags() {
         assert_eq!(
             serde_json::to_value(PermissionType::all()).unwrap(),
-            serde_json::json!(["call", "spend", "signatureVerification"]),
+            serde_json::json!(["call", "spend", "sign"]),
         );
         for ty in PermissionType::all() {
             let tag = serde_json::to_value(ty).unwrap();
@@ -111,10 +112,8 @@ mod tests {
                     period: crate::types::GridAccount::SpendPeriod::Day,
                     token: Address::ZERO,
                 }),
-                PermissionType::SignatureVerification => {
-                    Permission::SignatureVerification(SignatureVerificationPermission {
-                        addresses: vec![],
-                    })
+                PermissionType::Sign => {
+                    Permission::Sign(SignPermission { verifier: Address::ZERO })
                 }
             };
             assert_eq!(serde_json::to_value(&permission).unwrap()["type"], tag);
@@ -123,13 +122,13 @@ mod tests {
     }
 
     #[test]
-    fn signature_verification_permission_roundtrip() {
-        let json = r#"{"type":"signatureVerification","addresses":["0x000000000000000000000000000000000000c0de"]}"#;
+    fn sign_permission_roundtrip() {
+        let json = r#"{"type":"sign","verifier":"0x000000000000000000000000000000000000c0de"}"#;
         let permission = serde_json::from_str::<Permission>(json).unwrap();
         assert_eq!(
             permission,
-            Permission::SignatureVerification(SignatureVerificationPermission {
-                addresses: vec![address!("0x000000000000000000000000000000000000c0de")],
+            Permission::Sign(SignPermission {
+                verifier: address!("0x000000000000000000000000000000000000c0de"),
             })
         );
         assert_eq!(serde_json::to_string(&permission).unwrap(), json);

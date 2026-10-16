@@ -1,7 +1,7 @@
 use super::{
     Key, KeyHash, MULTICHAIN_NONCE_PREFIX_U192,
     OrchestratorContract::accountImplementationOfCall,
-    rpc::{Permission, SignatureVerificationPermission},
+    rpc::{Permission, SignPermission},
     storage::CreatableAccount,
 };
 use crate::{
@@ -451,12 +451,10 @@ impl<P: Provider> Account<P> {
         let permissions = permissions
             .into_iter()
             .zip(checkers)
-            .map(|(mut permissions, addresses)| {
-                if !addresses.is_empty() {
-                    permissions.push(Permission::SignatureVerification(
-                        SignatureVerificationPermission { addresses },
-                    ));
-                }
+            .map(|(mut permissions, verifiers)| {
+                permissions.extend(
+                    verifiers.into_iter().map(|verifier| SignPermission { verifier }.into()),
+                );
                 permissions
             })
             .collect::<Vec<_>>();

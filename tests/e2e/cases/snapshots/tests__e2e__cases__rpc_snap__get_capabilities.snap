@@ -165,7 +165,7 @@ expression: response
       "types": [
         "call",
         "spend",
-        "signatureVerification"
+        "sign"
       ]
     }
   }
